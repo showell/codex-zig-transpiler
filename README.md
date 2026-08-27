@@ -55,7 +55,7 @@ binary reads plain Codex on stdin and would choke on the mode line.
 | `zig` | 0.16.0 | builds the emitted zig into the binary |
 | `pwsh` | at `~/.local/pwsh/pwsh` | the checkout's own bundler is PowerShell |
 | a quiet box | ~4 GB free RAM | nothing here takes a lock; two 3 GB guests thrash rather than fail |
-| time | ~7 min cold, seconds warm | measured: 3 guests in 371s, zig in 2s, pass 2 in 58s |
+| time | ~7 min cold, 3 s warm | measured: 3 guests in 366s, zig 2s, pass 2 58s; a warm run skips all of it |
 
 `$COBBLESTONE_ROOT` is deliberately **not** `$CODEX_ROOT`. That one belongs
 to the codex-zig-ladder, which moves its checkout's HEAD between branches and

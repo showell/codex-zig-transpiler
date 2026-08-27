@@ -340,10 +340,21 @@ def main():
     refuse_markers(QEMU_ZIG)
 
     head('6  build the binary')
-    build_exe(QEMU_ZIG, CODEXZIG)
+    # Keyed to the INPUT, not the output: zig build-exe is not reproducible
+    # (generated/README.md has the measurement), so a rebuild would churn a
+    # tracked 28 MB file on every warm run and change nothing that matters.
+    if fresh(CODEXZIG, [QEMU_ZIG], args.force):
+        say(f'{CODEXZIG.name} was already built from this zig -- not rebuilding')
+    else:
+        build_exe(QEMU_ZIG, CODEXZIG)
+        stamp(CODEXZIG, [QEMU_ZIG])
 
-    head('7  transpile the bundle again')
-    self_transpile(SUBJECT, NATIVE_ZIG)
+    head('7  transpile the same source')
+    if fresh(NATIVE_ZIG, [CODEXZIG, SUBJECT], args.force):
+        say(f'{NATIVE_ZIG.name} is already this binary\'s answer -- not re-running')
+    else:
+        self_transpile(SUBJECT, NATIVE_ZIG)
+        stamp(NATIVE_ZIG, [CODEXZIG, SUBJECT])
     refuse_bad_transpile(NATIVE_ZIG, 'pass 2, native')
 
     held = fixed_point()
