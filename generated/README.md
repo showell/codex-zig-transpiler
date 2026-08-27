@@ -49,7 +49,14 @@ without opening a 9 MB file.
 Blobs are written only when their content changes, so a warm build does not
 churn them.
 
-## The binary is not reproducible, and that is zig's
+## What reproduces and what does not
+
+**Bare metal reproduces.** The seed, handed the same blob, emits the same
+bytes: `ringplug.cdx` rebuilt from scratch is byte-identical to the one
+already here, and `codexzig.qemu.zig` has come out the same across every
+build. So the QEMU half of this pipeline is a function of its input.
+
+**`zig build-exe` does not**, and that is zig's.
 
 `zig build-exe` does not emit the same bytes twice. Measured here, three
 builds from one unchanged `codexzig.qemu.zig`, seconds apart:
@@ -62,13 +69,20 @@ builds from one unchanged `codexzig.qemu.zig`, seconds apart:
 
 The size alternates between two values and the hash differs every time, and
 `--build-id=none` does not change that -- it looks like non-deterministic
-ordering in zig's own codegen, not anything this repository controls.
+ordering in zig's own codegen, not anything this repository controls. Note
+which half of the toolchain this is: the compiler running on bare metal
+under emulation is the reproducible one.
 
 Two consequences worth knowing:
 
-- **`codexzig` churns on every rebuild.** A changed binary here is not
-  evidence that anything changed. Read `PROVENANCE` and the two `.zig` files;
-  they are the reproducible artifacts.
+- **The binary is built once and kept.** The repository ships a working
+  `codexzig` so that getting one does not cost an 8 GB box and seven minutes,
+  and the one that does that job is whichever was built first. Rebuilding
+  would only produce a different 28 MB blob that is not better in any way
+  anyone can name, so stage 6 skips even under `--force`. To force one
+  anyway, delete it: `rm generated/codexzig`. A changed binary here is not
+  evidence that anything changed -- `PROVENANCE` and the two `.zig` files are
+  the reproducible artifacts.
 - **It does not threaten the fixed point.** That comparison is over zig text,
   not binaries, and it has held across builds whose binaries differed. The
   emitter's behaviour is deterministic even where its executable is not --

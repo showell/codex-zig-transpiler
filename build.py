@@ -340,11 +340,19 @@ def main():
     refuse_markers(QEMU_ZIG)
 
     head('6  build the binary')
-    # Keyed to the INPUT, not the output: zig build-exe is not reproducible
-    # (generated/README.md has the measurement), so a rebuild would churn a
-    # tracked 28 MB file on every warm run and change nothing that matters.
-    if fresh(CODEXZIG, [QEMU_ZIG], args.force):
-        say(f'{CODEXZIG.name} was already built from this zig -- not rebuilding')
+    # Built once and KEPT. The repository ships a working codexzig so that
+    # getting one does not require an 8 GB box and seven minutes, and the
+    # binary that does that job is whichever was built first -- zig
+    # build-exe is not reproducible (generated/README.md has the
+    # measurement), so a rebuild produces a different 28 MB blob that is not
+    # better in any way anyone can name.
+    #
+    # This guard deliberately ignores --force. That flag means "do not trust
+    # the fingerprints, run the guests again", and re-running them yields the
+    # same zig; it does not mean "replace a working executable with a
+    # different working executable". To force one anyway: rm generated/codexzig
+    if fresh(CODEXZIG, [QEMU_ZIG], force=False):
+        say(f'{CODEXZIG.name} was already built from this zig -- keeping it')
     else:
         build_exe(QEMU_ZIG, CODEXZIG)
         stamp(CODEXZIG, [QEMU_ZIG])
