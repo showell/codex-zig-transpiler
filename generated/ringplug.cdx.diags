@@ -1,0 +1,27 @@
+info CDX4030: PIPELINE fold-constants,inline-leaf-calls,inline-single-caller
+53:43: info CDX4010: bounds proven: runtime check elided
+194:37: info CDX4010: bounds proven: runtime check elided
+194:49: info CDX4010: bounds proven: runtime check elided
+194:61: info CDX4010: bounds proven: runtime check elided
+195:35: info CDX4010: bounds proven: runtime check elided
+195:47: info CDX4010: bounds proven: runtime check elided
+195:59: info CDX4010: bounds proven: runtime check elided
+196:15: info CDX4010: bounds proven: runtime check elided
+302:78: info CDX4010: bounds proven: runtime check elided
+1124:77: info CDX4010: bounds proven: runtime check elided
+1126:98: info CDX4010: bounds proven: runtime check elided
+1128:85: info CDX4010: bounds proven: runtime check elided
+1153:58: info CDX4010: bounds proven: runtime check elided
+1157:59: info CDX4010: bounds proven: runtime check elided
+1158:61: info CDX4010: bounds proven: runtime check elided
+1159:59: info CDX4010: bounds proven: runtime check elided
+1163:59: info CDX4010: bounds proven: runtime check elided
+1166:60: info CDX4010: bounds proven: runtime check elided
+1551:126: info CDX4010: bounds proven: runtime check elided
+1557:15: info CDX4010: bounds proven: runtime check elided
+1795:147: info CDX4010: bounds proven: runtime check elided
+1910:129: info CDX4010: bounds proven: runtime check elided
+2665:21: info CDX4010: bounds proven: runtime check elided
+4961:58: info CDX4010: bounds proven: runtime check elided
+5154:18: info CDX4010: bounds proven: runtime check elided
+5160:55: info CDX4010: bounds proven: runtime check elided

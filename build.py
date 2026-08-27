@@ -9,26 +9,33 @@ codexzig is one program: Codex source in, zig out.
 
     codexzig < prog.codex 2> prog.zig
 
-Getting one costs three guests, because the seed compiler emits x86 and not
-zig. The emitter has to be compiled to a bootable kernel first, then fed the
-transpiler's own IR, and only then is there a zig source to hand to `zig
-build-exe`. Six stages, and the last is the point of the whole exercise:
+The whole exercise is one loop:
 
-    1  bundle the ring plug          the emitter, as a subject          host
-    2  compile the ring plug         seed -> ringplug.cdx              GUEST
-    3  bundle the transpiler         compiler + emitter + harness       host
-    4  compile the transpiler        seed -> codexzig.ir               GUEST
-    5  transpile it                  ringplug.cdx -> codexzig.bare.zig GUEST
-    6  build the binary              zig build-exe                      host
-    7  transpile the bundle again    codexzig -> codexzig.self.zig      host
-    8  diff 5 against 7              THE FIXED POINT
+    blob -> QEMU -> zig -> exe -> (the same source again) -> zig -> diff
 
-Stage 8 is the invariant this repository exists for. The binary built the
-long way -- through the seed under QEMU, then through the ring plug under
-QEMU -- must reproduce, from the same source, the exact bytes that path
-produced for it. It exercises every chapter of the compiler and the whole
-emitter, and it costs about a minute against the forty the stages above
-already spent.
+Getting the first zig costs three guests, because the seed compiler emits x86
+and not zig. The emitter has to be compiled to a bootable kernel first, then
+fed the transpiler's own IR, and only then is there a zig source to build.
+
+    1  bundle the ring plug        the emitter, as a subject            host
+    2  compile the ring plug       seed -> ringplug.cdx                GUEST
+    3  bundle the transpiler       compiler + emitter + harness         host
+    4  compile the transpiler      seed -> codexzig.ir                 GUEST
+    5  transpile it                ringplug.cdx -> codexzig.qemu.zig   GUEST
+    6  build the binary            zig build-exe -> codexzig            host
+    7  transpile the same source   codexzig -> codexzig.native.zig      host
+    8  diff 5 against 7            THE FIXED POINT
+
+Stage 8 is the invariant this repository exists for. The emitter emits the
+same bytes for its own source whether it is running on bare metal under QEMU
+or as the native binary that run produced. It exercises every chapter of the
+compiler and the whole emitter, and it costs a minute against the seven the
+stages above already spent.
+
+Stage 7 is handed the same SOURCE as stage 4, not the same blob bytes. A blob
+is the source wrapped in the guest's intake envelope, and the envelope is
+what makes stage 4 answer with IR text instead of an x86 binary; the native
+binary reads plain Codex on stdin and would choke on the mode line.
 
 Every artifact lands under generated/ and is stamped with the checkout it
 came from -- see generated/PROVENANCE. A build that cannot say which
@@ -54,6 +61,7 @@ HERE = pathlib.Path(__file__).resolve().parent
 SOURCE = HERE / 'source'
 GEN = HERE / 'generated'
 LOCAL = GEN / 'local'
+INTAKE = GEN / 'intake'
 
 PWSH = pathlib.Path.home() / '.local' / 'pwsh' / 'pwsh'
 
@@ -61,9 +69,15 @@ RINGPLUG_SRC = GEN / 'ringplug-source.codex'
 RINGPLUG_CDX = GEN / 'ringplug.cdx'
 SUBJECT = GEN / 'codexzig-subject.codex'
 SUBJECT_IR = GEN / 'codexzig.ir'
-BARE_ZIG = GEN / 'codexzig.bare.zig'
-SELF_ZIG = GEN / 'codexzig.self.zig'
+QEMU_ZIG = GEN / 'codexzig.qemu.zig'
+NATIVE_ZIG = GEN / 'codexzig.native.zig'
 CODEXZIG = GEN / 'codexzig'
+
+# What each guest actually eats: the file above, plus a mode line.
+RINGPLUG_BLOB = INTAKE / 'ringplug-source.codex.blob'
+SUBJECT_BLOB = INTAKE / 'codexzig-subject.codex.blob'
+IR_BLOB = INTAKE / 'codexzig.ir.blob'
+CCE_PAYLOAD = LOCAL / 'codexzig.qemu.zig.cce'
 
 _t0 = time.time()
 
@@ -150,7 +164,7 @@ def preflight():
 
 # -------------------------------------------------------------------- stages
 
-def bundle(script, out, root):
+def bundle(script, out):
     """Run one of the PowerShell bundlers into `out`.
 
     The chapter lists are ours; Add-PlugChapter and Resolve-PlugForewords
@@ -171,10 +185,10 @@ def bundle(script, out, root):
 def refuse_bad_transpile(path, what):
     """A .zig file is only a transpile if it carries the subject.
 
-    Agreement is not enough on its own: two arms that both refused, or both
-    emitted a bare prelude for input that is not Codex at all, agree
+    Agreement is not enough on its own: two passes that both refused, or
+    both emitted a bare prelude for input that is not Codex at all, agree
     perfectly. A file reading `this is not codex at all` once produced
-    36,697 bytes of plausible zig and exit 0 from each arm.
+    36,697 bytes of plausible zig and exit 0 from each side.
     """
     text = pathlib.Path(path).read_text(errors='replace')
     for line in text.splitlines():
@@ -245,19 +259,20 @@ def self_transpile(subject, out_zig):
 def fixed_point():
     """The invariant. Two files, one comparison, no interpretation."""
     head('the fixed point')
-    for p, what in ((BARE_ZIG, 'bare-metal arm'), (SELF_ZIG, 'self arm')):
+    for p, what in ((QEMU_ZIG, 'pass 1, under QEMU'),
+                    (NATIVE_ZIG, 'pass 2, native')):
         if not p.is_file():
             die(f'{what}: no {p.name}; run without --check-only first')
         refuse_bad_transpile(p, what)
-    a, b = BARE_ZIG.read_bytes(), SELF_ZIG.read_bytes()
-    say(f'bare metal (seed + ring plug, under QEMU): {len(a)} bytes')
-    say(f'self       (codexzig on its own bundle):   {len(b)} bytes')
+    a, b = QEMU_ZIG.read_bytes(), NATIVE_ZIG.read_bytes()
+    say(f'pass 1  the emitter under QEMU:  {len(a)} bytes')
+    say(f'pass 2  the emitter as a binary: {len(b)} bytes')
     if a == b:
         say('HOLDS: byte-identical')
         return True
-    say('BROKEN: what codexzig emits for its own bundle differs from what')
-    say('        the seed-plus-ring-plug path emitted for it.')
-    r = subprocess.run(['diff', str(BARE_ZIG), str(SELF_ZIG)],
+    say('BROKEN: the emitter does not emit the same bytes for its own source')
+    say('        when it runs natively as when it ran under QEMU.')
+    r = subprocess.run(['diff', str(QEMU_ZIG), str(NATIVE_ZIG)],
                        capture_output=True, text=True)
     for line in r.stdout.splitlines()[:20]:
         say('  | ' + line)
@@ -277,59 +292,71 @@ def main():
     if args.check_only:
         raise SystemExit(0 if fixed_point() else 1)
 
-    GEN.mkdir(exist_ok=True)
-    LOCAL.mkdir(exist_ok=True)
+    for d in (GEN, LOCAL, INTAKE):
+        d.mkdir(exist_ok=True)
     root, seed, rev, provenance = preflight()
     import guest
 
     head('1  bundle the ring plug')
-    bundle(SOURCE / 'bundle_ringplug.ps1', RINGPLUG_SRC, root)
+    bundle(SOURCE / 'bundle_ringplug.ps1', RINGPLUG_SRC)
+    guest.wrap(RINGPLUG_SRC, guest.MODE_CDX, b'\x04', RINGPLUG_BLOB)
+    say(f'{RINGPLUG_BLOB.name}: {RINGPLUG_BLOB.stat().st_size} bytes')
 
     head('2  compile the ring plug  [GUEST]')
-    if fresh(RINGPLUG_CDX, [RINGPLUG_SRC, seed], args.force):
-        say(f'{RINGPLUG_CDX.name} already matches this bundle -- not recompiling')
+    if fresh(RINGPLUG_CDX, [RINGPLUG_BLOB, seed], args.force):
+        say(f'{RINGPLUG_CDX.name} already answers this blob -- not recompiling')
     else:
         RINGPLUG_CDX.unlink(missing_ok=True)
-        if not guest.seed_compile(RINGPLUG_SRC, RINGPLUG_CDX, seed, LOCAL, say):
+        if not guest.compile_ring(RINGPLUG_BLOB, RINGPLUG_CDX, seed, LOCAL, say=say):
             die('the seed could not compile the ring plug')
-        stamp(RINGPLUG_CDX, [RINGPLUG_SRC, seed])
+        stamp(RINGPLUG_CDX, [RINGPLUG_BLOB, seed])
 
     head('3  bundle the transpiler')
-    bundle(SOURCE / 'bundle_codexzig.ps1', SUBJECT, root)
+    bundle(SOURCE / 'bundle_codexzig.ps1', SUBJECT)
+    guest.wrap(SUBJECT, guest.MODE_IR, b'\x04', SUBJECT_BLOB)
+    say(f'{SUBJECT_BLOB.name}: {SUBJECT_BLOB.stat().st_size} bytes')
 
     head('4  compile the transpiler  [GUEST]')
-    if fresh(SUBJECT_IR, [SUBJECT, seed], args.force):
-        say(f'{SUBJECT_IR.name} already matches this bundle -- not recompiling')
+    if fresh(SUBJECT_IR, [SUBJECT_BLOB, seed], args.force):
+        say(f'{SUBJECT_IR.name} already answers this blob -- not recompiling')
     else:
         SUBJECT_IR.unlink(missing_ok=True)
-        if not guest.seed_compile_ir(SUBJECT, SUBJECT_IR, seed, LOCAL, say):
+        if not guest.compile_ring(SUBJECT_BLOB, SUBJECT_IR, seed, LOCAL, say=say):
             die('the seed could not compile the transpiler subject')
-        stamp(SUBJECT_IR, [SUBJECT, seed])
+        stamp(SUBJECT_IR, [SUBJECT_BLOB, seed])
 
     head('5  transpile it  [GUEST]')
-    if fresh(BARE_ZIG, [SUBJECT_IR, RINGPLUG_CDX], args.force):
-        say(f'{BARE_ZIG.name} already matches this IR -- not re-transpiling')
+    guest.wrap(SUBJECT_IR, guest.MODE_ZIG, b'\x00', IR_BLOB)
+    say(f'{IR_BLOB.name}: {IR_BLOB.stat().st_size} bytes')
+    if fresh(QEMU_ZIG, [IR_BLOB, RINGPLUG_CDX], args.force):
+        say(f'{QEMU_ZIG.name} already answers this blob -- not re-transpiling')
     else:
-        BARE_ZIG.unlink(missing_ok=True)
-        if not guest.ring_transpile(SUBJECT_IR, BARE_ZIG, RINGPLUG_CDX, LOCAL, say):
+        QEMU_ZIG.unlink(missing_ok=True)
+        if not guest.compile_ring(IR_BLOB, CCE_PAYLOAD, RINGPLUG_CDX, LOCAL, say=say):
             die('the ring plug emitted no zig')
-        stamp(BARE_ZIG, [SUBJECT_IR, RINGPLUG_CDX])
-    refuse_bad_transpile(BARE_ZIG, 'bare-metal arm')
-    refuse_markers(BARE_ZIG)
+        guest.decode_zig(CCE_PAYLOAD, QEMU_ZIG, say)
+        stamp(QEMU_ZIG, [IR_BLOB, RINGPLUG_CDX])
+    refuse_bad_transpile(QEMU_ZIG, 'pass 1, under QEMU')
+    refuse_markers(QEMU_ZIG)
 
     head('6  build the binary')
-    build_exe(BARE_ZIG, CODEXZIG)
+    build_exe(QEMU_ZIG, CODEXZIG)
 
     head('7  transpile the bundle again')
-    self_transpile(SUBJECT, SELF_ZIG)
-    refuse_bad_transpile(SELF_ZIG, 'self arm')
+    self_transpile(SUBJECT, NATIVE_ZIG)
+    refuse_bad_transpile(NATIVE_ZIG, 'pass 2, native')
 
     held = fixed_point()
 
+    intake = ['', 'what each guest was actually handed (intake/):', '']
+    for blob in (RINGPLUG_BLOB, SUBJECT_BLOB, IR_BLOB):
+        mode = blob.read_bytes().split(b'\n', 1)[0].decode()
+        intake.append(f'  {blob.name:<32} {blob.stat().st_size:>9} bytes '
+                      f'  mode {mode!r}')
     (GEN / 'PROVENANCE').write_text(
         'Everything beside this file is emitted by build.py. Nothing here is\n'
         'source; edit source/ and rebuild.\n\n'
-        + '\n'.join(provenance)
+        + '\n'.join(provenance + intake)
         + f'\n\nfixed point  {"HOLDS" if held else "BROKEN"}\n'
         + f'built in     {time.time() - _t0:.0f}s\n')
     head('done' if held else 'done -- WITH A BROKEN FIXED POINT')

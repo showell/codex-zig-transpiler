@@ -13,17 +13,26 @@ Everything below lands in `generated/`.
    source/bundle_codexzig.ps1  +  $COBBLESTONE_ROOT
 3  ------------------------------------------------>  codexzig-subject.codex
 4  seed/Codex.cdx  ==QEMU==>                           codexzig.ir
-5  ringplug.cdx    ==QEMU==>                           codexzig.bare.zig
+5  ringplug.cdx    ==QEMU==>                           codexzig.qemu.zig
 6  zig build-exe                                       codexzig
 
-7  codexzig < codexzig-subject.codex               ->  codexzig.self.zig
+7  codexzig < codexzig-subject.codex               ->  codexzig.native.zig
 8  diff 5 7                                        ->  THE FIXED POINT
 ```
 
+Each guest is handed a blob from `generated/intake/`: the file named above it,
+wrapped in a mode line and a terminator. The mode line is what makes stage 2
+and stage 4 different runs of the same compiler over different sources --
+`CDX map` asks for a bootable binary, `IR-CCE decks=172` asks for IR text.
+
 Stages 4 and 5 are two separate guests, so the IR between them is a **file**.
 Inside `codexzig` at stage 7 the same IR is a `let` and never touches disk --
-same code, same order, one of the two arms just has a filesystem in the
-middle. The fixed point is those two arms agreeing anyway.
+same code, same order, one pass just has a filesystem in the middle. The
+fixed point is both passes emitting the same bytes anyway.
+
+Stage 7 gets the same *source* as stage 4, not the same blob. The envelope is
+the guest's, and it is exactly what makes stage 4 answer with IR text instead
+of an x86 binary.
 
 ## Why the emitter has to become a kernel first
 

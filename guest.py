@@ -1,4 +1,4 @@
-"""The bare-metal arm: one QEMU guest, driven over serial and the gdbstub.
+"""Bare metal: one QEMU guest, driven over serial and the gdbstub.
 
 Two things run on bare metal in this repository and they are the SAME
 function with a different kernel. `compile_ring` boots a kernel, hands it
@@ -285,7 +285,8 @@ def _read_sized(data, timeout, say):
     return out
 
 
-def compile_ring(blob_path, out_path, kernel, timeout=1800, say=print):
+def compile_ring(blob_path, out_path, kernel, scratch=None, timeout=1800,
+                 say=print):
     """Boot `kernel`, feed it `blob_path`, write its payload to `out_path`.
 
     Returns True on a sized payload. Diagnostics land beside the output as
@@ -296,10 +297,19 @@ def compile_ring(blob_path, out_path, kernel, timeout=1800, say=print):
     months.
     """
     blob = pathlib.Path(blob_path).read_bytes()
+    # A NUL terminates read-serial-cce, so one inside the payload truncates
+    # the input silently. Only MODE_ZIG blobs end in one, and by then every
+    # byte before it has been checked.
+    if b'\x00' in blob[:-1]:
+        raise SystemExit(f'{blob_path}: embedded NUL; the guest would stop early')
     staged = min(len(blob), RING_SIZE)
     stage_path = blob_path
     if len(blob) > RING_SIZE:
-        stage_path = str(blob_path) + '.stage1'
+        # The first megabyte again, on its own, because QEMU's loader takes a
+        # file rather than a slice. Pure duplication of bytes the blob already
+        # holds, so it goes to scratch even though the blob is kept.
+        stage_path = str(pathlib.Path(scratch or pathlib.Path(blob_path).parent)
+                         / (pathlib.Path(blob_path).name + '.stage1'))
         pathlib.Path(stage_path).write_bytes(blob[:RING_SIZE])
 
     gp = free_port()
@@ -359,50 +369,59 @@ def compile_ring(blob_path, out_path, kernel, timeout=1800, say=print):
             return False
         pathlib.Path(out_path).write_bytes(payload)
         say(f'wrote {out_path} ({size} bytes)')
+        # Whatever the guest said after the payload, kept rather than dropped.
+        # What it holds depends on the mode: a `CDX map` compile answers with
+        # the symbol table (626 entries for the ring plug), and an `IR-CCE`
+        # compile answers with WD:PHASE-* watchdog checksums, one per front-end
+        # phase. Those checksums are a determinism fingerprint of the compile
+        # itself -- two runs that agree on the zig but disagree here would be
+        # worth knowing about -- and there is no reading of them yet, which is
+        # why this keeps the file and says only that it did.
+        trailer = out[nl + 1 + size:]
+        if trailer.strip():
+            mpath = pathlib.Path(scratch or pathlib.Path(out_path).parent) / (
+                pathlib.Path(out_path).name + '.map')
+            mpath.write_bytes(trailer)
+            say(f'trailer: {len(trailer)} bytes -> {mpath.name}')
         return True
     finally:
         proc.kill()
         proc.wait()
 
 
-def _blob(source_path, mode, terminator, scratch):
-    """Wrap a source in the guest's intake envelope: mode line, bytes, EOT."""
-    src = pathlib.Path(source_path).read_bytes()
-    path = pathlib.Path(scratch) / (pathlib.Path(source_path).name + '.blob')
-    path.write_bytes(mode + src + terminator)
-    return str(path)
+# The mode line is the instruction. The same seed, handed the same source,
+# answers with an x86 binary or with IR text depending on which of these
+# opens the blob -- so these three constants are a parameter of every
+# measurement this repository makes, and they exist nowhere else.
+MODE_CDX = b'CDX map\n'             # seed -> a bootable CDX binary
+MODE_IR = b'IR-CCE decks=172\n'     # seed -> IR text, in CCE
+MODE_ZIG = b'RING zig\n'            # ring plug -> zig, in CCE
 
 
-def seed_compile(source_path, out_cdx, seed, scratch, say=print):
-    """Compile a bundled Codex source to a CDX binary, on bare metal."""
-    blob = _blob(source_path, b'CDX map\n', b'\x04', scratch)
-    return compile_ring(blob, out_cdx, seed, say=say)
+def wrap(source_path, mode, terminator, out_blob):
+    """Build the guest's intake blob: mode line, source bytes, terminator.
 
-
-def seed_compile_ir(source_path, out_ir, seed, scratch, say=print):
-    """Compile a bundled Codex source and capture its IR text.
-
-    The mode line is what differs from seed_compile: `IR-CCE decks=172`
-    asks the guest for IR rather than a binary.
+    This is what bare metal actually consumes, which is why it is an output
+    and not scratch. It is also deterministic in its inputs, so an unchanged
+    blob is left exactly as it is -- rewriting identical bytes would churn a
+    tracked 9 MB file on every warm run for no reason.
     """
-    blob = _blob(source_path, b'IR-CCE decks=172\n', b'\x04', scratch)
-    return compile_ring(blob, out_ir, seed, say=say)
+    blob = mode + pathlib.Path(source_path).read_bytes() + terminator
+    out = pathlib.Path(out_blob)
+    out.parent.mkdir(parents=True, exist_ok=True)
+    if out.is_file() and out.read_bytes() == blob:
+        return str(out)
+    out.write_bytes(blob)
+    return str(out)
 
 
-def ring_transpile(ir_path, out_zig, plug_cdx, scratch, say=print):
-    """Feed IR text to the ring plug and decode the zig it answers.
+def decode_zig(payload_path, out_zig, say=print):
+    """Decode a CCE payload from the ring plug into readable zig.
 
     Any byte >= 97 is multibyte CCE, which the host table does not carry;
     that fails the run rather than leaving <NN> placeholders in a .zig file
     for zig to choke on later.
     """
-    if b'\x00' in pathlib.Path(ir_path).read_bytes():
-        raise SystemExit(f'{ir_path}: contains NUL; read-serial-cce would '
-                         f'stop early')
-    blob = _blob(ir_path, b'RING zig\n', b'\x00', scratch)
-    payload_path = str(pathlib.Path(scratch) / (pathlib.Path(out_zig).name + '.cce'))
-    if not compile_ring(blob, payload_path, plug_cdx, say=say):
-        return False
     text = cce.decode(pathlib.Path(payload_path).read_bytes())
     bad = re.search(r'<\d+>', text)
     if bad:

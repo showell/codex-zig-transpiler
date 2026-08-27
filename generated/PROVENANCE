@@ -1,0 +1,19 @@
+Everything beside this file is emitted by build.py. Nothing here is
+source; edit source/ and rebuild.
+
+checkout   /home/steve/showell_repos/cobblestone-pin
+           3942e362  PR 93 absorbed with seed 4341370C: lambda parameter types carried to the IR (Steve Howell)
+seed       Codex.cdx  2929040 bytes
+zig        0.16.0
+qemu       QEMU emulator version 8.2.2 (Debian 1:8.2.2+ds-0ubuntu1.18)
+pwsh       PowerShell 7.5.4
+guest      accel=tcg  mem=3072MB
+
+what each guest was actually handed (intake/):
+
+  ringplug-source.codex.blob          308884 bytes   mode 'CDX map'
+  codexzig-subject.codex.blob        2924160 bytes   mode 'IR-CCE decks=172'
+  codexzig.ir.blob                   9903051 bytes   mode 'RING zig'
+
+fixed point  HOLDS
+built in     425s

@@ -2,9 +2,10 @@
 
 The property is one comparison:
 
-> The binary built the long way — seed under QEMU, then the ring plug under
-> QEMU, then `zig build-exe` — reproduces, from the same source, the exact
-> bytes that path produced for it.
+> The emitter emits the same bytes for its own source whether it is running
+> on bare metal under QEMU, or as the native binary that run produced.
+>
+>     blob -> QEMU -> zig -> exe -> (the same source again) -> zig -> diff
 
 ## What it covers
 
@@ -25,14 +26,14 @@ clock inside the subject and no fixed point could ever hold.
 
 **Whether the answer is right.** This is the important one. The fixed point
 is a self-consistency property: it says the emitter agrees with itself. An
-emitter with a bug that affects both arms identically passes cleanly. The
+emitter with a bug that affects both passes identically passes cleanly. The
 canonical shape is a silently wrong answer — code that compiles, runs, and
 returns the wrong number — which self-agreement cannot see at all.
 
-For that you need an oracle outside the zig arm, and there is one: the
+For that you need an oracle outside the zig backend, and there is one: the
 **codex-zig-ladder** compiles the same chapters through the seed on bare
 metal and requires byte agreement across fourteen rungs. That is a
-comparison against something that does not share the zig arm's mistakes.
+comparison against something that does not share the emitter's mistakes.
 This repository does not replace it and cannot.
 
 **Whether it was built from the checkout you meant.** The fixed point holds
@@ -47,16 +48,17 @@ property never exercises. Breadth is the ladder's corpus.
 
 ## What a break means
 
-A break is a finding, not a flake. The two arms run the same code in the same
+A break is a finding, not a flake. Both passes run the same code in the same
 order — that is what the in-memory IR text round trip buys — so they have no
 licence to differ.
 
 When they do, `build.py` prints the first 20 lines of the diff. The two
 things worth checking first:
 
-1. **Did the checkout move under the build?** A stale `local/codexzig.ir`
-   beside a fresh bundle is caught by the fingerprint files, but a checkout
-   edited mid-build is not. `--force` settles it.
+1. **Did the checkout move under the build?** A stale `codexzig.ir` beside a
+   fresh bundle is caught by the fingerprint files -- each guest stage is
+   keyed to the exact blob it was handed, in `generated/intake/` -- but a
+   checkout edited mid-build is not. `--force` settles it.
 2. **Is the difference in a lifted lambda?** `lift-lambdas` is on this path
    and its ceiling here is 0 for a reason the harness explains at length. Any
    non-zero ceiling stops the lift on its first definition and emits a

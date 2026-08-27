@@ -11,27 +11,40 @@ property that makes it trustworthy.
 
 ## The fixed point
 
-`codexzig` is built the long way: the seed compiler compiles the transpiler's
-own source to IR on bare metal under QEMU, the zig emitter — itself compiled
-to a bootable kernel — turns that IR into zig, and `zig build-exe` turns the
-zig into a binary.
-
-Then the binary is handed its own source, and **must emit those same bytes.**
+One loop:
 
 ```
-generated/codexzig.bare.zig   what the seed and the ring plug emitted
-generated/codexzig.self.zig   what the binary built from that emits for the same source
-                              -> byte-identical, or it is a finding
+blob -> QEMU -> zig -> exe -> (the same source again) -> zig -> diff
 ```
 
-That single comparison exercises every chapter of the compiler and the whole
-emitter, and it costs about a minute against the forty the build already
-spent. It is not a test suite and it is not a comparison against a reference
-implementation; it is an invariant, and it either holds or it does not.
+`codexzig` is built the long way, because the seed compiler emits x86 and not
+zig: the seed compiles the transpiler's own source to IR under QEMU, the zig
+emitter — itself compiled to a bootable kernel — turns that IR into zig, and
+`zig build-exe` turns the zig into a binary.
+
+Then that binary is handed the same source, and **must emit the same bytes.**
+
+```
+generated/codexzig.qemu.zig     pass 1 — the emitter running under QEMU
+generated/codexzig.native.zig   pass 2 — the emitter running as the binary pass 1 built
+                                -> byte-identical, or it is a finding
+```
+
+Said as a property: *the emitter emits the same bytes for its own source
+whether it runs on bare metal or as a native binary.* That single comparison
+exercises every chapter of the compiler and the whole emitter, and it costs a
+minute against the seven the build already spent. It is not a test suite and
+not a comparison against a reference implementation; it is an invariant, and
+it either holds or it does not.
 
 It is also not a guarantee of correctness. The fixed point holds just as well
 against the wrong checkout, which is why every artifact is stamped with the
 revision it came from — see `generated/PROVENANCE`.
+
+Pass 2 is handed the same *source* as pass 1, not the same blob bytes. A blob
+is that source wrapped in the guest's intake envelope, and the envelope is
+what makes QEMU answer with IR text rather than an x86 binary; the native
+binary reads plain Codex on stdin and would choke on the mode line.
 
 ## Requirements
 
@@ -42,7 +55,7 @@ revision it came from — see `generated/PROVENANCE`.
 | `zig` | 0.16.0 | builds the emitted zig into the binary |
 | `pwsh` | at `~/.local/pwsh/pwsh` | the checkout's own bundler is PowerShell |
 | a quiet box | ~4 GB free RAM | nothing here takes a lock; two 3 GB guests thrash rather than fail |
-| time | ~40 min cold, seconds warm | three QEMU guests; stages skip when their inputs have not moved |
+| time | ~7 min cold, seconds warm | measured: 3 guests in 371s, zig in 2s, pass 2 in 58s |
 
 `$COBBLESTONE_ROOT` is deliberately **not** `$CODEX_ROOT`. That one belongs
 to the codex-zig-ladder, which moves its checkout's HEAD between branches and
@@ -73,11 +86,12 @@ fixed point breaks.
 
 ```
 build.py        the driver: eight stages, three of them guests
-guest.py        the bare-metal arm -- QEMU, the serial ring, the gdbstub
+guest.py        bare metal -- QEMU, the serial ring, the gdbstub
 cobblestone.py  where the sister checkout is, and which one it is
 cce.py          host-side decode of the compressed encoding the guest answers in
 source/         the parts that are ours: two chapter lists and three Codex chapters
-generated/      everything the build emits, tracked -- see generated/README.md
+generated/      everything the build emits, tracked, including the binary
+                and the exact blobs bare metal ate -- see generated/README.md
 docs/           how the pipeline works, and what the fixed point does not cover
 ```
 
@@ -99,5 +113,6 @@ answers are asked).
   is deliberately much smaller.
 
 The distinction matters when deciding where work goes. If the question is
-"does the zig arm agree with bare metal", it belongs in the ladder. If the
-question is "does this one program still reproduce itself", it belongs here.
+"does the zig backend agree with bare metal", it belongs in the ladder. If
+the question is "does this one program still reproduce itself", it belongs
+here.
