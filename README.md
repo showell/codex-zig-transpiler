@@ -78,6 +78,20 @@ export COBBLESTONE_ROOT=~/showell_repos/cobblestone-pin
 ./build.py --check-only    # check the fixed point against what is on disk
 ```
 
+## Just want a working transpiler?
+
+You do not need any of the above. `generated/codexzig.qemu.zig` is in this
+repository, and it is the whole program:
+
+```
+zig build-exe generated/codexzig.qemu.zig -femit-bin=codexzig
+./codexzig < prog.codex 2> prog.zig
+```
+
+Two seconds, no QEMU, no PowerShell, no checkout. That is why the repository
+tracks the zig and not the 28 MB executable — which zig does not build
+reproducibly anyway.
+
 `build.py` prints its provenance before it spends anything, names each stage
 as it runs, and marks the three that start a guest. It exits non-zero if the
 fixed point breaks.

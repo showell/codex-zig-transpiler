@@ -5,9 +5,15 @@ one is editing something that will be overwritten without warning. The
 sources are in `../source/` and in the Cobblestone checkout that
 `PROVENANCE` names.
 
-These artifacts are tracked on purpose, the binary included. The point of
-this repository is that you can read the zig the compiler emits for itself
--- and run the transpiler -- without owning an 8 GB box and forty minutes.
+These artifacts are tracked on purpose. The point of this repository is that
+you can read the zig the compiler emits for itself -- and build a working
+transpiler out of it, `zig build-exe generated/codexzig.qemu.zig`, two
+seconds -- without owning an 8 GB box and seven minutes.
+
+The 28 MB executable is NOT tracked, and that is the same argument pointed
+the other way: the zig is here, so the binary is two seconds away, and a
+blob that large which zig does not even build reproducibly is not worth
+carrying to save them.
 
 | file | size | what it is |
 | --- | --- | --- |
@@ -17,8 +23,7 @@ this repository is that you can read the zig the compiler emits for itself
 | `codexzig-subject.codex` | 2.9 MB | the compiler + the emitter + the harness, one chapter |
 | `codexzig.ir` | 9.9 MB | the seed's IR for that subject, and the ring plug's input |
 | `codexzig.qemu.zig` | 2.3 MB | pass 1 — the emitter running under QEMU |
-| `codexzig` | 28 MB | that zig, built |
-| `codexzig.native.zig` | 2.3 MB | pass 2 — the emitter running as that binary |
+| `codexzig.native.zig` | 2.3 MB | pass 2 — the emitter running as the binary built from pass 1 |
 | `*.diags` | | what the compiler said while producing each of the above |
 | `intake/*.blob` | | see below |
 
@@ -75,14 +80,11 @@ under emulation is the reproducible one.
 
 Two consequences worth knowing:
 
-- **The binary is built once and kept.** The repository ships a working
-  `codexzig` so that getting one does not cost an 8 GB box and seven minutes,
-  and the one that does that job is whichever was built first. Rebuilding
-  would only produce a different 28 MB blob that is not better in any way
-  anyone can name, so stage 6 skips even under `--force`. To force one
-  anyway, delete it: `rm generated/codexzig`. A changed binary here is not
-  evidence that anything changed -- `PROVENANCE` and the two `.zig` files are
-  the reproducible artifacts.
+- **The binary is not tracked, and is built once locally.** It lands in
+  `local/codexzig`. Rebuilding only produces a different 28 MB blob that is
+  not better in any way anyone can name, so stage 6 skips even under
+  `--force`; delete it to force one. The reproducible artifacts are
+  `PROVENANCE` and the two `.zig` files.
 - **It does not threaten the fixed point.** That comparison is over zig text,
   not binaries, and it has held across builds whose binaries differed. The
   emitter's behaviour is deterministic even where its executable is not --
@@ -108,7 +110,8 @@ and the other through a `let`, is the fixed point.
 ## local/
 
 Untracked, and the only ignored path in the repository. It holds pure
-scratch: the ring's staged first megabyte (a duplicate of the blob's own
-first megabyte, because QEMU's loader takes a file and not a slice), the CCE
-payload before decoding, the guest's symbol maps, zig's build cache, and the
-fingerprint files that let a stage skip when its inputs have not moved.
+scratch and one product: the `codexzig` executable, the ring's staged first
+megabyte (a duplicate of the blob's own first megabyte, because QEMU's loader
+takes a file and not a slice), the CCE payload before decoding, the guest's
+symbol maps, zig's build cache, and the fingerprint files that let a stage
+skip when its inputs have not moved.

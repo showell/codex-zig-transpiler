@@ -22,7 +22,7 @@ fed the transpiler's own IR, and only then is there a zig source to build.
     3  bundle the transpiler       compiler + emitter + harness         host
     4  compile the transpiler      seed -> codexzig.ir                 GUEST
     5  transpile it                ringplug.cdx -> codexzig.qemu.zig   GUEST
-    6  build the binary            zig build-exe -> codexzig            host
+    6  build the binary            zig build-exe -> local/codexzig      host
     7  transpile the same source   codexzig -> codexzig.native.zig      host
     8  diff 5 against 7            THE FIXED POINT
 
@@ -71,7 +71,7 @@ SUBJECT = GEN / 'codexzig-subject.codex'
 SUBJECT_IR = GEN / 'codexzig.ir'
 QEMU_ZIG = GEN / 'codexzig.qemu.zig'
 NATIVE_ZIG = GEN / 'codexzig.native.zig'
-CODEXZIG = GEN / 'codexzig'
+CODEXZIG = LOCAL / 'codexzig'
 
 # What each guest actually eats: the file above, plus a mode line.
 RINGPLUG_BLOB = INTAKE / 'ringplug-source.codex.blob'
@@ -340,17 +340,17 @@ def main():
     refuse_markers(QEMU_ZIG)
 
     head('6  build the binary')
-    # Built once and KEPT. The repository ships a working codexzig so that
-    # getting one does not require an 8 GB box and seven minutes, and the
-    # binary that does that job is whichever was built first -- zig
-    # build-exe is not reproducible (generated/README.md has the
-    # measurement), so a rebuild produces a different 28 MB blob that is not
-    # better in any way anyone can name.
+    # Untracked, and that is a deliberate reversal. The binary was tracked so
+    # that people could get a working codexzig without an 8 GB box and seven
+    # minutes -- but codexzig.qemu.zig is tracked, and `zig build-exe` on it
+    # takes two seconds and needs no QEMU, no pwsh and no checkout. Keeping a
+    # 28 MB blob that zig does not even build reproducibly, to save two
+    # seconds, is a bad trade.
     #
-    # This guard deliberately ignores --force. That flag means "do not trust
-    # the fingerprints, run the guests again", and re-running them yields the
-    # same zig; it does not mean "replace a working executable with a
-    # different working executable". To force one anyway: rm generated/codexzig
+    # It is still built once and kept locally, and this guard ignores --force:
+    # that flag means "do not trust the fingerprints, run the guests again",
+    # and re-running them yields the same zig. It does not mean "replace a
+    # working executable with a different working executable".
     if fresh(CODEXZIG, [QEMU_ZIG], force=False):
         say(f'{CODEXZIG.name} was already built from this zig -- keeping it')
     else:

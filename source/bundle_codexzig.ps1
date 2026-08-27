@@ -45,7 +45,13 @@
 # caller is strip-fun-args-emitter, a different function, and the one real
 # caller is X86_64Chapter.codex, which the zig emitter never runs. So the arm
 # cannot reach the emitted bytes and no oracle is needed to say so.
-param([string]$OutFile)
+# -Harness selects the front door. CodexZigHarness reads /dev/stdin and is
+# what the shipped transpiler uses; CodexZigRingHarness reads the serial ring
+# and is what a bare-metal kernel needs. Same chapters either way, which is
+# the whole reason this is a parameter and not a second copy of the list.
+param([string]$OutFile,
+      [string]$Harness = 'CodexZigHarness.codex',
+      [string]$PlugName = 'codexzig-subject')
 $ErrorActionPreference = 'Stop'
 $here = $PSScriptRoot
 $repo = (& python3 (Join-Path $here '..' 'cobblestone.py')).Trim()
@@ -132,7 +138,7 @@ foreach ($ch in @('codex/compiler/Core/OffsetTable.codex',
 # names a chapter rather than a symbol, so a subject carrying PhaseAllocator
 # must answer for one. BootPaintStubs.codex says why it is a stub.
 Add-PlugChapter -Lines $lines -Path (Join-Path $here 'BootPaintStubs.codex') -Quire 'Parsmi'
-Add-PlugChapter -Lines $lines -Path (Join-Path $here 'CodexZigHarness.codex') -Quire 'Parsmi'
+Add-PlugChapter -Lines $lines -Path (Join-Path $here $Harness) -Quire 'Parsmi'
 
 # All 14 pages of the X86-64 Code Generator chapter are present, so the
 # 'Page N of 14' trailers stand as upstream wrote them. Upstream rewrites
@@ -140,4 +146,4 @@ Add-PlugChapter -Lines $lines -Path (Join-Path $here 'CodexZigHarness.codex') -Q
 # never does, so there is nothing to renumber.
 
 $preLines = Resolve-PlugForewords $lines
-Bundle-PlugSource -PreLines $preLines -Lines $lines -BundleSrc $OutFile -PlugName 'codexzig-subject'
+Bundle-PlugSource -PreLines $preLines -Lines $lines -BundleSrc $OutFile -PlugName $PlugName
