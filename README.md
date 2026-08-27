@@ -37,12 +37,21 @@ revision it came from — see `generated/PROVENANCE`.
 
 | | | why |
 | --- | --- | --- |
-| `$CODEX_ROOT` | a [Cobblestone](https://github.com/damiant3/Cobblestone) checkout | every chapter is read from here; nothing is vendored |
+| `$COBBLESTONE_ROOT` | a [Cobblestone](https://github.com/damiant3/Cobblestone) checkout | every chapter is read from here; nothing is vendored |
 | `qemu-system-x86_64` | any recent | the seed and the emitter run on bare metal |
 | `zig` | 0.16.0 | builds the emitted zig into the binary |
 | `pwsh` | at `~/.local/pwsh/pwsh` | the checkout's own bundler is PowerShell |
-| RAM | ~4 GB free | the guest takes 3 GB, and two at once thrash rather than fail |
-| time | ~40 min cold, ~1 min warm | three QEMU guests; stages skip when their inputs have not moved |
+| a quiet box | ~4 GB free RAM | nothing here takes a lock; two 3 GB guests thrash rather than fail |
+| time | ~40 min cold, seconds warm | three QEMU guests; stages skip when their inputs have not moved |
+
+`$COBBLESTONE_ROOT` is deliberately **not** `$CODEX_ROOT`. That one belongs
+to the codex-zig-ladder, which moves its checkout's HEAD between branches and
+pinned Updates all day as part of how it works. Point this at a checkout that
+stays where it is put:
+
+```
+git -C <cobblestone> worktree add --detach ~/showell_repos/cobblestone-pin <rev>
+```
 
 `CODEX_MEM_MB` caps the guest (default 3072; the seed dies silently above
 it on an 8 GB box). `CODEX_ACCEL` selects the accelerator (default `tcg`).
@@ -50,7 +59,7 @@ it on an 8 GB box). `CODEX_ACCEL` selects the accelerator (default `tcg`).
 ## Building
 
 ```
-export CODEX_ROOT=~/showell_repos/NewRepository
+export COBBLESTONE_ROOT=~/showell_repos/cobblestone-pin
 ./build.py                 # build what is stale, then check the fixed point
 ./build.py --force         # rebuild every stage, guests included
 ./build.py --check-only    # check the fixed point against what is on disk
@@ -66,7 +75,6 @@ fixed point breaks.
 build.py        the driver: eight stages, three of them guests
 guest.py        the bare-metal arm -- QEMU, the serial ring, the gdbstub
 cobblestone.py  where the sister checkout is, and which one it is
-lock.py         one guest at a time on this box
 cce.py          host-side decode of the compressed encoding the guest answers in
 source/         the parts that are ours: two chapter lists and three Codex chapters
 generated/      everything the build emits, tracked -- see generated/README.md
@@ -74,7 +82,7 @@ docs/           how the pipeline works, and what the fixed point does not cover
 ```
 
 Deliberately absent: any Codex source from Cobblestone (read from
-`$CODEX_ROOT`), and the two-process `codexir | zigemit` pipeline that
+`$COBBLESTONE_ROOT`), and the two-process `codexir | zigemit` pipeline that
 `codexzig` merges (it lives in the ladder, which is where the questions it
 answers are asked).
 

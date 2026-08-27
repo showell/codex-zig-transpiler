@@ -31,9 +31,13 @@ emitter, and it costs about a minute against the forty the stages above
 already spent.
 
 Every artifact lands under generated/ and is stamped with the checkout it
-came from. A build that cannot say which checkout it measured is not
-evidence, and the fixed point cannot supply the difference -- it holds just
-as well against the wrong source.
+came from -- see generated/PROVENANCE. A build that cannot say which
+checkout it measured is not evidence, and the fixed point cannot supply the
+difference: it holds just as well against the wrong source.
+
+The checkout is $COBBLESTONE_ROOT, which is deliberately not the ladder's
+$CODEX_ROOT. Nothing here takes a lock or checks for other guests; a build
+assumes it has the box.
 """
 
 import argparse
@@ -50,17 +54,16 @@ HERE = pathlib.Path(__file__).resolve().parent
 SOURCE = HERE / 'source'
 GEN = HERE / 'generated'
 LOCAL = GEN / 'local'
-BIN = LOCAL / 'bin'
 
 PWSH = pathlib.Path.home() / '.local' / 'pwsh' / 'pwsh'
 
 RINGPLUG_SRC = GEN / 'ringplug-source.codex'
-RINGPLUG_CDX = LOCAL / 'ringplug.cdx'
+RINGPLUG_CDX = GEN / 'ringplug.cdx'
 SUBJECT = GEN / 'codexzig-subject.codex'
-SUBJECT_IR = LOCAL / 'codexzig.ir'
+SUBJECT_IR = GEN / 'codexzig.ir'
 BARE_ZIG = GEN / 'codexzig.bare.zig'
 SELF_ZIG = GEN / 'codexzig.self.zig'
-CODEXZIG = BIN / 'codexzig'
+CODEXZIG = GEN / 'codexzig'
 
 _t0 = time.time()
 
@@ -83,6 +86,12 @@ def sha(path):
     return hashlib.sha256(pathlib.Path(path).read_bytes()).hexdigest()
 
 
+def _fp(out):
+    # Fingerprints live in local/ rather than beside the artifact: they are
+    # cache control, not provenance. PROVENANCE is provenance.
+    return LOCAL / (pathlib.Path(out).name + '.fp')
+
+
 def fresh(out, inputs, force):
     """Is `out` already the answer for these `inputs`?
 
@@ -92,15 +101,14 @@ def fresh(out, inputs, force):
     """
     if force:
         return False
-    fp = pathlib.Path(str(out) + '.fp')
+    fp = _fp(out)
     if not (pathlib.Path(out).exists() and fp.is_file()):
         return False
     return fp.read_text().strip() == '\n'.join(sha(i) for i in inputs)
 
 
 def stamp(out, inputs):
-    pathlib.Path(str(out) + '.fp').write_text(
-        '\n'.join(sha(i) for i in inputs) + '\n')
+    _fp(out).write_text('\n'.join(sha(i) for i in inputs) + '\n')
 
 
 # ----------------------------------------------------------------- preflight
@@ -125,7 +133,7 @@ def preflight():
         r = subprocess.run(cmd, capture_output=True, text=True)
         return r.stdout.strip().splitlines()[0] if r.stdout.strip() else '?'
 
-    import guest   # imported here so preflight can report before a lock exists
+    import guest   # here, so preflight can report before qemu is touched
     lines = [
         f'checkout   {root}',
         f'           {rev}',
@@ -206,7 +214,7 @@ def refuse_markers(path):
 
 
 def build_exe(zig_src, out_bin):
-    out_bin.parent.mkdir(parents=True, exist_ok=True)
+    # cwd=local/ so zig's cache lands in the untracked half.
     out_bin.unlink(missing_ok=True)
     r = subprocess.run(['zig', 'build-exe', str(zig_src),
                         f'-femit-bin={out_bin}'],

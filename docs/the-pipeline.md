@@ -3,20 +3,27 @@
 Eight stages. Three start a QEMU guest and cost minutes; the rest cost
 seconds. `build.py` names each one as it runs and marks the guests.
 
-```
-   source/bundle_ringplug.ps1  +  $CODEX_ROOT
-1  ------------------------------------------------> generated/ringplug-source.codex
-2  seed/Codex.cdx  ==QEMU==>                          local/ringplug.cdx
+Everything below lands in `generated/`.
 
-   source/bundle_codexzig.ps1  +  $CODEX_ROOT
-3  ------------------------------------------------> generated/codexzig-subject.codex
-4  seed/Codex.cdx  ==QEMU==>                          local/codexzig.ir
-5  ringplug.cdx    ==QEMU==>                          generated/codexzig.bare.zig
-6  zig build-exe                                      local/bin/codexzig
-
-7  codexzig < codexzig-subject.codex               -> generated/codexzig.self.zig
-8  diff 5 8                                        -> THE FIXED POINT
 ```
+   source/bundle_ringplug.ps1  +  $COBBLESTONE_ROOT
+1  ------------------------------------------------>  ringplug-source.codex
+2  seed/Codex.cdx  ==QEMU==>                           ringplug.cdx
+
+   source/bundle_codexzig.ps1  +  $COBBLESTONE_ROOT
+3  ------------------------------------------------>  codexzig-subject.codex
+4  seed/Codex.cdx  ==QEMU==>                           codexzig.ir
+5  ringplug.cdx    ==QEMU==>                           codexzig.bare.zig
+6  zig build-exe                                       codexzig
+
+7  codexzig < codexzig-subject.codex               ->  codexzig.self.zig
+8  diff 5 7                                        ->  THE FIXED POINT
+```
+
+Stages 4 and 5 are two separate guests, so the IR between them is a **file**.
+Inside `codexzig` at stage 7 the same IR is a `let` and never touches disk --
+same code, same order, one of the two arms just has a filesystem in the
+middle. The fixed point is those two arms agreeing anyway.
 
 ## Why the emitter has to become a kernel first
 

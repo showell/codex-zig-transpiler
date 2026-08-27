@@ -1,9 +1,16 @@
 """The sister checkout: where it is, and which one it is.
 
 This repository holds no Codex source. Every chapter it bundles is read
-out of a Cobblestone checkout named by $CODEX_ROOT, and every artifact
-under generated/ is stamped with the revision it was read from. A build
-that cannot say which checkout it measured is not evidence.
+out of a Cobblestone checkout named by $COBBLESTONE_ROOT, and every
+artifact under generated/ is stamped with the revision it was read from. A
+build that cannot say which checkout it measured is not evidence.
+
+The variable is deliberately NOT $CODEX_ROOT. That one belongs to the
+codex-zig-ladder, which moves its checkout's HEAD between branches and
+pinned Updates all day as part of how it works. Sharing the variable would
+mean this repository's answer depended on what the ladder happened to be
+doing, and a fixed point built from a checkout nobody chose is worth
+nothing. Point this one at a checkout that stays where it is put.
 """
 
 import os
@@ -18,7 +25,7 @@ HERE = pathlib.Path(__file__).resolve().parent
 
 
 class NoCheckout(RuntimeError):
-    """$CODEX_ROOT is unset, or does not name a checkout."""
+    """$COBBLESTONE_ROOT is unset, or does not name a checkout."""
 
 
 def root():
@@ -29,14 +36,15 @@ def root():
     the one failure the fixed point cannot catch -- it holds just as well
     against the wrong source.
     """
-    named = os.environ.get('CODEX_ROOT')
+    named = os.environ.get('COBBLESTONE_ROOT')
     if not named:
         raise NoCheckout(
-            'CODEX_ROOT is unset. Point it at a Cobblestone checkout: '
-            'export CODEX_ROOT=~/showell_repos/NewRepository')
+            'COBBLESTONE_ROOT is unset. Point it at a Cobblestone checkout '
+            'that stays put -- not the ladder\'s, whose HEAD moves:\n'
+            '    export COBBLESTONE_ROOT=~/showell_repos/cobblestone-pin')
     path = pathlib.Path(named).expanduser().resolve()
     if not (path / MARKER).is_file():
-        raise NoCheckout(f'CODEX_ROOT={named} holds no {MARKER}')
+        raise NoCheckout(f'COBBLESTONE_ROOT={named} holds no {MARKER}')
     return path
 
 

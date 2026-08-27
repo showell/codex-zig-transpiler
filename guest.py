@@ -29,7 +29,6 @@ import sys
 import time
 
 import cce
-import lock
 
 ACCEL = os.environ.get('CODEX_ACCEL', 'tcg')
 # One variable caps every guest on a host. The 8 GB box runs the 3072
@@ -53,10 +52,11 @@ def free_port():
 def launch(kernel, mem_mb, extra_args=()):
     """Boot a Codex kernel and return (proc, data, ctrl).
 
-    The ONE place this repository runs qemu, which is why the compute lock
-    is taken here and nowhere else.
+    The one place this repository runs qemu. It assumes it has the box, and
+    nothing here enforces that: two 3 GB guests on an 8 GB machine do not
+    fail, they thrash at 2% CPU each and finish in the morning. Check the
+    machine is quiet before starting a build on a shared one.
     """
-    lock.take()
     # Fixed ports collide with leftover guests and with TIME_WAIT across
     # rapid relaunches, so both are dynamic.
     data_port, ctrl_port = free_port(), free_port()
@@ -416,5 +416,4 @@ def ring_transpile(ir_path, out_zig, plug_cdx, scratch, say=print):
 
 if __name__ == '__main__':
     # For poking at one stage by hand without running the whole build.
-    print(f'accel={ACCEL} mem={MEM_MB}MB  guests now: {lock.guests() or "none"}',
-          file=sys.stderr)
+    print(f'accel={ACCEL} mem={MEM_MB}MB', file=sys.stderr)
