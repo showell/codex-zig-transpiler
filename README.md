@@ -37,9 +37,13 @@ minute against the seven the build already spent. It is not a test suite and
 not a comparison against a reference implementation; it is an invariant, and
 it either holds or it does not.
 
-It is also not a guarantee of correctness. The fixed point holds just as well
-against the wrong checkout, which is why every artifact is stamped with the
-revision it came from — see `generated/PROVENANCE`.
+What it does not tell you is *which* compiler you built. Point
+`$COBBLESTONE_ROOT` at a different revision — a previous Update, a branch
+someone is mid-experiment on — and the property holds just as well there,
+because it only ever compares a build against itself. That is a narrow blind
+spot rather than a general one, but it is a blind spot you can walk into by
+exporting one variable, so every artifact is stamped with the revision it
+came from: `generated/PROVENANCE`.
 
 Pass 2 is handed the same *source* as pass 1, not the same blob bytes. A blob
 is that source wrapped in the guest's intake envelope, and the envelope is
@@ -120,8 +124,8 @@ the cell is four bytes wide and 5120 MB silently becomes 1024.
 
 The obvious simplification is to put the compiler and the emitter in one
 kernel, so the bootstrap becomes *compile codexzig to a kernel, then use it to
-transpile codexzig*. `experiments/two_guests.py` builds exactly that, and the
-kernel is real — 1,971,047 bytes, compiled clean.
+transpile codexzig*. That kernel was built and it is real — 1,971,047 bytes,
+compiled clean.
 
 It does not fit, and the numbers leave no room to argue:
 

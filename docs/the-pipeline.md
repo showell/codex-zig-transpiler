@@ -129,8 +129,8 @@ Anything **not** on that list still stops the build, whatever its spelling.
 
 Putting the compiler and the emitter in one kernel would make the whole
 bootstrap *compile codexzig to a kernel, then use it to transpile codexzig* —
-one bundle, two guests. `experiments/two_guests.py` builds that kernel and it
-compiles clean.
+one bundle, two guests. That kernel was built, from this same chapter list
+behind a serial-ring harness, and it compiles clean at 1,971,047 bytes.
 
 It cannot run. One guest merged holds the source, the AST, the IR and the
 emitted text at once over an allocator that never frees, so its peak is the
@@ -151,3 +151,7 @@ Two things learned on the way there are worth keeping, because both failed
   bytes of bare prelude, a parse of garbage, and exit 0. The seed's own driver
   reads a unit with `read-file-uni` then `utf8-to-cce`
   (`opening.codex:2188-2189`), which is the conversion.
+
+The kernel and its harness are not kept here. They were about 200 lines to
+maintain for a shape that cannot run, and what is worth keeping is the
+measurement above.

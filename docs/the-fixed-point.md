@@ -36,11 +36,17 @@ metal and requires byte agreement across fourteen rungs. That is a
 comparison against something that does not share the emitter's mistakes.
 This repository does not replace it and cannot.
 
-**Whether it was built from the checkout you meant.** The fixed point holds
-just as well against the wrong source, so it supplies no evidence about
-which. `generated/PROVENANCE` is the answer to that question and the only
-one — it names the checkout, its revision, whether that checkout was dirty,
-and the toolchain versions. Read it before quoting a result.
+**Which compiler you built.** Both passes read the same checkout, so the
+property is indifferent to which one it was: build from last month's Update,
+or from a branch someone is mid-experiment on, and it holds there too. It is
+not that any wrongness survives this check — a truncated subject, a chapter
+that failed to bundle, an emitter that halts, all show up. It is specifically
+that the *identity* of the source is not one of the things being compared,
+and identity is exactly what you rely on when quoting a result later.
+
+`generated/PROVENANCE` is the answer to that question and the only one — it
+names the checkout, its revision, whether that checkout was dirty, and the
+toolchain versions. Read it before quoting a result.
 
 **Breadth over real programs.** The subject is one program, and an unusual
 one: a compiler. Constructs a compiler does not use are constructs this
