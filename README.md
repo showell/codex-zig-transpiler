@@ -37,30 +37,36 @@ minute against the seven the build already spent. It is not a test suite and
 not a comparison against a reference implementation; it is an invariant, and
 it either holds or it does not.
 
-It is not a proof of correctness — but it is a demanding property, not a
-weak one, and it is worth being precise about which.
+It is not a proof of correctness, but it is far harder to fool than a
+self-hash, and the reason is that **the emitter is its own subject.**
 
-**Holding at all takes a working compiler and a working zig plug.** The two
-passes run the same `ZigEmitter` source through *different backends*: pass 1's
-emitter is compiled by the seed to x86 and runs bare metal, while pass 2's
-emitter is compiled by the zig plug to zig and then built by zig. So a plug
-defect that changes how the emitter itself behaves lands here as a difference.
-Editing the plug breaks this easily, which is the point. This repository has
-only ever seen it hold at the one revision `generated/PROVENANCE` names, and
-there is no reason to assume it held at an arbitrary earlier Update.
+Holding at all takes a working compiler and a working zig plug. The two
+passes run the same `ZigEmitter` source through *different backends* — pass
+1's emitter compiled by the seed to x86 and run bare metal, pass 2's compiled
+by the zig plug to zig and then built by zig. So a defect in translating any
+construct the compiler itself uses does not merely produce bad output
+somewhere: it corrupts the binary that performs pass 2, and a corrupted
+emitter emits different bytes. **A defect has to survive being applied to
+itself.** Most do not. They produce zig that will not compile at all across
+2.9 MB of compiler source, or zig that compiles into an emitter which then
+disagrees with the one that made it. This repository has only seen the
+property hold at the revision `generated/PROVENANCE` names, and there is no
+reason to assume it held at an arbitrary earlier Update.
 
-**What slips through is being wrong consistently.** Both passes use the same
-plug, so an edit that changes the emitted zig the *same way* in both holds the
-fixed point while changing every byte of the output. The property says the
-emitter agrees with itself across two backends; it does not say the answer is
-right. For that you need an oracle outside the zig arm — see the ladder,
-below.
+What can still get through is narrow, and none of it is "inconsistency":
 
-**And it cannot tell you which compiler you built.** Two different healthy
-revisions each hold their own fixed point, with different bytes, so agreement
-never identifies the source. That is a blind spot you can walk into by
-exporting one variable, which is why every artifact is stamped:
-`generated/PROVENANCE`.
+- **Constructs the subject never uses.** The subject is one program and a
+  compiler is an unusual one — that is a breadth gap, and it is the ladder's
+  corpus that covers it, not this.
+- **Emissions that are wrong but neutral here.** A different-but-equivalent
+  form for something the compiler does use: it compiles, the emitter behaves
+  the same, the bytes agree. Wrong against a spec, invisible to this.
+- **Which compiler you built.** Two healthy revisions each hold their own
+  fixed point with different bytes, so agreement never identifies the source.
+  That is what `generated/PROVENANCE` is for.
+
+For anything outside that you want an oracle outside the zig arm — the
+ladder, below.
 
 Pass 2 is handed the same *source* as pass 1, not the same blob bytes. A blob
 is that source wrapped in the guest's intake envelope, and the envelope is

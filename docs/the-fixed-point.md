@@ -24,44 +24,47 @@ clock inside the subject and no fixed point could ever hold.
 
 ## What it does not cover
 
-**Whether the answer is right.** This is the important one. The fixed point
-is a self-consistency property: it says the emitter agrees with itself. An
-emitter with a bug that affects both passes identically passes cleanly. The
-canonical shape is a silently wrong answer — code that compiles, runs, and
-returns the wrong number — which self-agreement cannot see at all.
+First, what it is NOT easy to slip past, because the tempting summary --
+"it only checks the emitter against itself, so a consistent bug passes" -- is
+wrong in practice.
 
-For that you need an oracle outside the zig backend, and there is one: the
-**codex-zig-ladder** compiles the same chapters through the seed on bare
-metal and requires byte agreement across fourteen rungs. That is a
-comparison against something that does not share the emitter's mistakes.
+The emitter is its own subject. A defect in translating some construct does
+not just corrupt output somewhere off to the side; if the compiler uses that
+construct anywhere in 2.9 MB of source, the defect corrupts **the binary that
+performs pass 2**. A corrupted emitter then emits different bytes than the
+uncorrupted one that built it, and the comparison fails. Add that pass 1's
+emitter comes from the seed's x86 backend and pass 2's from the zig plug's,
+and a defect has to survive being applied to itself, across two backends, and
+still produce zig that compiles at all. Most do not come close.
+
+So the things that DO get through are specific:
+
+**Constructs the subject never uses.** A compiler is a broad program but not
+an exhaustive one. This is a coverage gap rather than a consistency gap, and
+the ladder's corpus is what closes it.
+
+**Emissions that are wrong but neutral here.** A different-but-equivalent
+form for something the compiler does use compiles, leaves the emitter's
+behaviour unchanged, and agrees. Wrong against a specification, invisible to
+this property.
+
+**A wrong answer both backends share.** The canonical shape: code that
+compiles, runs, and returns the wrong number, identically on x86 and in zig.
+Self-application cannot see it. That needs an oracle outside the zig arm, and
+there is one -- the **codex-zig-ladder** compiles the same chapters through
+the seed on bare metal and requires byte agreement across fourteen rungs.
 This repository does not replace it and cannot.
 
-**Being wrong consistently.** This is the sharp edge. Both passes use the
-same zig plug, so an edit that changes the emitted zig the *same way* in both
-of them holds the fixed point while changing every byte of the output. What
-the property tests is agreement between two backends, not conformance to
-anything.
+**Which compiler you built.** Two healthy revisions each hold their own fixed
+point, with different bytes, so agreement never identifies the source. Do not
+read this as "it holds at any revision" -- holding requires a working compiler
+and a working plug, and this repository has only seen it hold at the revision
+`generated/PROVENANCE` names. The point is narrower: *given* that it holds,
+that fact alone tells you nothing about which checkout you had.
 
-The agreement is still worth something, and more than it first looks. Pass 1's
-emitter is `ZigEmitter` compiled by the seed to x86; pass 2's emitter is the
-same source compiled by the zig plug to zig and then built. A plug defect that
-changes how the emitter itself behaves shows up here. Breaking this by editing
-the plug is easy, and that is the property doing its job.
-
-**Which compiler you built.** Two different healthy revisions each hold their
-own fixed point, with different bytes, so agreement never identifies the
-source. Do not read this as "it holds at any revision" — holding requires a
-working compiler and a working plug, and this repository has only seen it hold
-at the revision `generated/PROVENANCE` names. The point is narrower: *given*
-that it holds, that fact alone tells you nothing about which checkout you had.
-
-`generated/PROVENANCE` is the answer to that question and the only one — it
+`generated/PROVENANCE` is the answer to that question and the only one -- it
 names the checkout, its revision, whether that checkout was dirty, and the
 toolchain versions. Read it before quoting a result.
-
-**Breadth over real programs.** The subject is one program, and an unusual
-one: a compiler. Constructs a compiler does not use are constructs this
-property never exercises. Breadth is the ladder's corpus.
 
 ## What a break means
 
