@@ -1,27 +1,31 @@
+120:3: warning CDX3005: Definition 'is-whitespace' has the same name as a builtin. Whether a call site gets this definition or the builtin depends on how that builtin is lowered, and the source does not say which -- so if this is deliberate, it is deliberate about something you cannot read here. If it is not, rename it. Check the COST as well as the answer: a shadow that computes the same result more slowly is the failure mode that has actually cost time here. This chapter's shadow applies to the whole compilation unit, and to any unit that cites it.
+123:3: warning CDX3005: Definition 'is-digit' has the same name as a builtin. Whether a call site gets this definition or the builtin depends on how that builtin is lowered, and the source does not say which -- so if this is deliberate, it is deliberate about something you cannot read here. If it is not, rename it. Check the COST as well as the answer: a shadow that computes the same result more slowly is the failure mode that has actually cost time here. This chapter's shadow applies to the whole compilation unit, and to any unit that cites it.
+148:3: warning CDX3005: Definition 'is-letter' has the same name as a builtin. Whether a call site gets this definition or the builtin depends on how that builtin is lowered, and the source does not say which -- so if this is deliberate, it is deliberate about something you cannot read here. If it is not, rename it. Check the COST as well as the answer: a shadow that computes the same result more slowly is the failure mode that has actually cost time here. This chapter's shadow applies to the whole compilation unit, and to any unit that cites it.
+705:3: warning CDX3005: Definition 'text-split' has the same name as a builtin. Whether a call site gets this definition or the builtin depends on how that builtin is lowered, and the source does not say which -- so if this is deliberate, it is deliberate about something you cannot read here. If it is not, rename it. Check the COST as well as the answer: a shadow that computes the same result more slowly is the failure mode that has actually cost time here. This chapter's shadow applies to the whole compilation unit, and to any unit that cites it.
 info CDX4030: PIPELINE fold-constants,inline-leaf-calls,inline-single-caller
 53:43: info CDX4010: bounds proven: runtime check elided
-194:37: info CDX4010: bounds proven: runtime check elided
-194:49: info CDX4010: bounds proven: runtime check elided
-194:61: info CDX4010: bounds proven: runtime check elided
-195:35: info CDX4010: bounds proven: runtime check elided
-195:47: info CDX4010: bounds proven: runtime check elided
-195:59: info CDX4010: bounds proven: runtime check elided
-196:15: info CDX4010: bounds proven: runtime check elided
-302:78: info CDX4010: bounds proven: runtime check elided
-1124:77: info CDX4010: bounds proven: runtime check elided
-1126:98: info CDX4010: bounds proven: runtime check elided
-1128:85: info CDX4010: bounds proven: runtime check elided
-1153:58: info CDX4010: bounds proven: runtime check elided
-1157:59: info CDX4010: bounds proven: runtime check elided
-1158:61: info CDX4010: bounds proven: runtime check elided
-1159:59: info CDX4010: bounds proven: runtime check elided
-1163:59: info CDX4010: bounds proven: runtime check elided
-1166:60: info CDX4010: bounds proven: runtime check elided
-1551:126: info CDX4010: bounds proven: runtime check elided
-1557:15: info CDX4010: bounds proven: runtime check elided
-1795:147: info CDX4010: bounds proven: runtime check elided
-1910:129: info CDX4010: bounds proven: runtime check elided
-2665:21: info CDX4010: bounds proven: runtime check elided
-4961:58: info CDX4010: bounds proven: runtime check elided
-5154:18: info CDX4010: bounds proven: runtime check elided
-5160:55: info CDX4010: bounds proven: runtime check elided
+987:37: info CDX4010: bounds proven: runtime check elided
+987:49: info CDX4010: bounds proven: runtime check elided
+987:61: info CDX4010: bounds proven: runtime check elided
+988:35: info CDX4010: bounds proven: runtime check elided
+988:47: info CDX4010: bounds proven: runtime check elided
+988:59: info CDX4010: bounds proven: runtime check elided
+989:15: info CDX4010: bounds proven: runtime check elided
+1096:78: info CDX4010: bounds proven: runtime check elided
+1918:77: info CDX4010: bounds proven: runtime check elided
+1920:98: info CDX4010: bounds proven: runtime check elided
+1922:85: info CDX4010: bounds proven: runtime check elided
+1947:58: info CDX4010: bounds proven: runtime check elided
+1951:59: info CDX4010: bounds proven: runtime check elided
+1952:61: info CDX4010: bounds proven: runtime check elided
+1953:59: info CDX4010: bounds proven: runtime check elided
+1957:59: info CDX4010: bounds proven: runtime check elided
+1960:60: info CDX4010: bounds proven: runtime check elided
+2346:126: info CDX4010: bounds proven: runtime check elided
+2352:15: info CDX4010: bounds proven: runtime check elided
+2590:147: info CDX4010: bounds proven: runtime check elided
+2705:129: info CDX4010: bounds proven: runtime check elided
+3504:21: info CDX4010: bounds proven: runtime check elided
+5800:58: info CDX4010: bounds proven: runtime check elided
+5993:18: info CDX4010: bounds proven: runtime check elided
+5999:55: info CDX4010: bounds proven: runtime check elided

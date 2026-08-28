@@ -91,21 +91,6 @@ pub fn main() void {
 
 const std = @import("std");
 
-// cx_gpa and the heap it allocates from live beside the buffer
-// builtins below: one region, one bump frontier, bare metal's model.
-
-fn CxFn1(comptime A: type, comptime R: type) type {
-    return struct { ctx: *anyopaque, call: *const fn (*anyopaque, A) R };
-}
-fn CxFn2(comptime A: type, comptime B: type, comptime R: type) type {
-    return struct { ctx: *anyopaque, call: *const fn (*anyopaque, A, B) R };
-}
-fn CxFn3(comptime A: type, comptime B: type, comptime C: type, comptime R: type) type {
-    return struct { ctx: *anyopaque, call: *const fn (*anyopaque, A, B, C) R };
-}
-fn CxFn4(comptime A: type, comptime B: type, comptime C: type, comptime D: type, comptime R: type) type {
-    return struct { ctx: *anyopaque, call: *const fn (*anyopaque, A, B, C, D) R };
-}
 fn CxList(comptime T: type) type {
     return struct { items: std.ArrayListUnmanaged(T) = .empty };
 }
@@ -113,10 +98,6 @@ fn cx_ll_empty(comptime T: type) *CxList(T) {
     const cx_l = cx_gpa.create(CxList(T)) catch @panic("oom");
     cx_l.* = .{};
     return cx_l;
-}
-fn cx_ll_push(l: anytype, v: anytype) @TypeOf(l) {
-    l.items.append(cx_gpa, v) catch @panic("oom");
-    return l;
 }
 // Exact, not rounded. These three build most of what emission
 // allocates -- every instruction is a list literal (mov-rr is
@@ -143,174 +124,11 @@ fn cx_ll_concat(a: anytype, b: @TypeOf(a)) @TypeOf(a) {
     c.items.appendSliceAssumeCapacity(b.items.items);
     return c;
 }
-fn cx_ll_cons(v: anytype, l: anytype) @TypeOf(l) {
-    const c = cx_new(@TypeOf(l.*){ .items = .empty });
-    c.items.ensureTotalCapacityPrecise(cx_gpa, 1 + l.items.items.len) catch @panic("oom");
-    c.items.appendAssumeCapacity(v);
-    c.items.appendSliceAssumeCapacity(l.items.items);
-    return c;
-}
-fn cx_ll_insert_at(l: anytype, i: i64, v: anytype) @TypeOf(l) {
-    l.items.insert(cx_gpa, @intCast(i), v) catch @panic("oom");
-    return l;
-}
-// The capacity is load-bearing, not a hint. The emit tables are
-// pre-sized to accum-capacity precisely so a push inside emit-all-defs'
-// per-definition save/restore bracket never reallocates: a reallocation
-// there lands in scratch the bracket reclaims, and the table's header
-// survives pointing at bytes the next definition overwrites. The
-// compiler says so itself, in the guard beside that bracket -- "a push
-// past it reallocates into scratch that this loop reclaims, corrupting
-// the table". Discarding n was survivable only while __heap-restore was
-// a no-op. Precise, not rounded: pre-allocated to accum-capacity is a
-// statement about a number.
-fn cx_ll_with_capacity(comptime T: type, n: i64) *CxList(T) {
-    const l = cx_ll_empty(T);
-    if (n > 0) l.items.ensureTotalCapacityPrecise(cx_gpa, @intCast(n)) catch @panic("oom");
-    return l;
-}
-fn cx_text_compare(a: []const u8, b: []const u8) i64 {
-    return switch (std.mem.order(u8, a, b)) { .lt => -1, .eq => 0, .gt => 1 };
-}
-// Mirrors bare metal's __text_to_double, not a correctly-rounded parse:
-// accumulate the digits as one wrapping integer, count places after the
-// dot, cvtsi2sd once, divide once by 10^frac built by repeated
-// multiplication. The bits land in IrNumLit, so they must match the seed's
-// exactly; a parser that rounds better is a parser that diverges.
-fn cx_text_to_double_bits(s: []const u8) i64 {
-    if (s.len == 0) return 0;
-    var i: usize = 0;
-    var neg = false;
-    if (s[0] == 73) {
-        neg = true;
-        i = 1;
-    }
-    var acc: i64 = 0;
-    var frac: i64 = 0;
-    var dot: i64 = 0;
-    while (i < s.len) : (i += 1) {
-        const b = s[i];
-        if (b == 65) {
-            dot = 1;
-            continue;
-        }
-        acc = acc *% 10 +% (@as(i64, b) -% 3);
-        frac += dot;
-    }
-    if (neg) acc = -%acc;
-    var v: f64 = @floatFromInt(acc);
-    if (frac != 0) {
-        var p: f64 = 1.0;
-        var k = frac;
-        while (k != 0) : (k -= 1) p *= 10.0;
-        v /= p;
-    }
-    return @bitCast(v);
-}
-// real-f32 on bare metal is f32 bits in a general register (a movd
-// round-trip, emit-bits-to-real-approx-builtin); Real is f64 here, and
-// widening the named f32 value is exact.
-fn cx_bits_to_real_approx(bits: i64) f64 {
-    return @floatCast(@as(f32, @bitCast(@as(u32, @truncate(@as(u64, @bitCast(bits)))))));
-}
-// A char is a CCE code and text is CCE, so making text from a char is
-// ONE raw byte, the way bare metal does: emit-char-to-text-builtin stores
-// the code with mov-store-byte, length 1, no framing, truncating silently
-// past 255. Byte-wise text rebuilds (ir-quote walks char-code-at /
-// code-to-char / char-to-text over every byte) rely on that identity to
-// pass CCE frame bytes through untouched; framing or converting here
-// corrupts the wire.
-fn cx_char_to_text(c: i64) []const u8 {
-    const b = cx_gpa.alloc(u8, 1) catch @panic("oom");
-    b[0] = @truncate(@as(u64, @bitCast(c)));
-    return b;
-}
-fn cx_char_encode(c: i64) []const u8 {
-    const u = @as(u64, @bitCast(c));
-    if (u < 128) {
-        const b = cx_gpa.alloc(u8, 1) catch @panic("oom");
-        b[0] = @truncate(u);
-        return b;
-    }
-    if (u < 2176) {
-        const v = u - 128;
-        const b = cx_gpa.alloc(u8, 2) catch @panic("oom");
-        b[0] = @truncate(192 | (v >> 6));
-        b[1] = @truncate(128 | (v & 63));
-        return b;
-    }
-    if (u < 67712) {
-        const v = u - 2176;
-        const b = cx_gpa.alloc(u8, 3) catch @panic("oom");
-        b[0] = @truncate(224 | (v >> 12));
-        b[1] = @truncate(128 | ((v >> 6) & 63));
-        b[2] = @truncate(128 | (v & 63));
-        return b;
-    }
-    const v = u - 67712;
-    const b = cx_gpa.alloc(u8, 4) catch @panic("oom");
-    b[0] = @truncate(240 | (v >> 18));
-    b[1] = @truncate(128 | ((v >> 12) & 63));
-    b[2] = @truncate(128 | ((v >> 6) & 63));
-    b[3] = @truncate(128 | (v & 63));
-    return b;
-}
 fn cx_list_len(l: anytype) i64 {
     return @intCast(l.items.items.len);
 }
 fn cx_list_at(l: anytype, i: i64) @TypeOf(l.items.items[0]) {
     return l.items.items[@intCast(i)];
-}
-fn cx_text_len(s: []const u8) i64 {
-    return @intCast(s.len);
-}
-fn cx_char_at(s: []const u8, i: i64) i64 {
-    return @intCast(s[@intCast(i)]);
-}
-// Traps rather than clamps, because bare metal traps: emit-substring-bounds
-// (Emit/X86_64Builtins.codex:666) emits three UD2s -- negative start,
-// negative length, and len past the end -- at a deliberate ruling, since a
-// clamp turns a program's bug into quietly wrong data and a safety guarantee
-// is never silently degraded. The unchecked version returned the whole of
-// the NEXT allocation verbatim. Note the third check subtracts rather than
-// adding: start + len can wrap, and the input that wraps it is the one an
-// attacker picks; s.len - cx_a cannot, because the guard above pins cx_a to
-// [0, s.len]. Finding 28.
-// Copies, because bare metal copies, and the difference is observable:
-// emit-substring-alloc bumps r10 -- the LIVE allocation register, which
-// inside a deck extent is the deck cursor -- so a substring taken between
-// __deck-enter and __deck-exit lands ON THE DECK and outlives a rewind of
-// the frontier. A slice of the argument cannot: it stays where the argument
-// was, and a value that looks decked and is not becomes a table full of
-// reclaimed bytes. Same reasoning for every piece of a split. Finding 29.
-fn cx_text_dup(s: []const u8) []const u8 {
-    const cx_out = cx_gpa.alloc(u8, s.len) catch @panic("oom");
-    @memcpy(cx_out, s);
-    return cx_out;
-}
-fn cx_substring(s: []const u8, start: i64, len: i64) []const u8 {
-    if (start < 0 or len < 0) @panic("cx substring: negative start or length");
-    const cx_a: usize = @intCast(start);
-    if (cx_a > s.len or len > @as(i64, @intCast(s.len - cx_a))) @panic("cx substring: out of range");
-    return cx_text_dup(s[cx_a .. cx_a + @as(usize, @intCast(len))]);
-}
-fn cx_ipow(a: i64, b: i64) i64 {
-    if (b < 0) return 0;
-    var cx_acc: i64 = 1;
-    var cx_base = a;
-    var cx_e = b;
-    while (cx_e > 0) {
-        if ((cx_e & 1) == 1) cx_acc = cx_acc *% cx_base;
-        cx_base = cx_base *% cx_base;
-        cx_e = cx_e >> 1;
-    }
-    return cx_acc;
-}
-fn cx_shl(a: i64, b: i64) i64 {
-    return a << @as(u6, @intCast(b & 63));
-}
-fn cx_shr(a: i64, b: i64) i64 {
-    return a >> @as(u6, @intCast(b & 63));
 }
 // ONE heap, bare metal's own model: records, lists, text, closures,
 // buffers and the emit workspace all come from a single bump frontier
@@ -356,10 +174,6 @@ fn cx_heap_base() [*]u8 {
         cx_heap_mem = cx_p[0..cx_heap_reserve];
     }
     return cx_heap_mem.ptr;
-}
-fn cx_buf_want(n: i64) void {
-    if (n < 0 or @as(usize, @intCast(n)) > cx_heap_reserve) std.debug.panic("cx heap: address {d} outside the {d}-byte region", .{ n, cx_heap_reserve });
-    _ = cx_heap_base();
 }
 // The deck is a FINITE reservation and nothing else enforces it. The
 // program places it with __deck-set and then lifts the main frontier
@@ -433,65 +247,6 @@ fn cx_bump_free(_: *anyopaque, memory: []u8, _: std.mem.Alignment, _: usize) voi
 }
 const cx_heap_vtable = std.mem.Allocator.VTable{ .alloc = cx_bump_alloc, .resize = cx_bump_resize, .remap = cx_bump_remap, .free = cx_bump_free };
 const cx_gpa = std.mem.Allocator{ .ptr = undefined, .vtable = &cx_heap_vtable };
-fn cx_heap_save() i64 {
-    return cx_hp;
-}
-fn cx_heap_advance(n: i64) i64 {
-    if (cx_deck_armed) {
-        cx_deck_armed = false;
-        cx_deck_top = cx_hp + n;
-        cx_hp += cx_deck_slack;
-    }
-    cx_hp += n;
-    return 0;
-}
-fn cx_heap_restore(h: i64) i64 {
-    cx_hp = h;
-    return 0;
-}
-// Wrapping, because bare metal does a single 64-bit load and every
-// bit pattern is a legal i64. Rebuilding the value with checked * and +
-// traps on any qword whose top byte sets the high bit -- that is, on
-// every NEGATIVE qword. Measured 2026-08-21 with
-// findings/probe-peek-qword.codex: bytes 00 00 00 00 00 00 00 FF answer
-// -72057594037927936 on bare metal and panic here.
-fn cx_peek_qword(b: i64, off: i64) i64 {
-    cx_buf_want(b + off + 8);
-    var cx_v: i64 = 0;
-    var cx_j: i64 = 7;
-    while (cx_j >= 0) : (cx_j -= 1) cx_v = cx_v *% 256 +% cx_heap_mem[@as(usize, @intCast(b + off + cx_j))];
-    return cx_v;
-}
-// Bare metal's address-of is emit-identity-builtin: it returns the VALUE,
-// and since records, lists and texts are pointers there, the value IS the
-// address. Answering a constant 0 made every object identical to every other
-// one AND to null, and the compiler reads that as an answer: mode-ordinal and
-// real-width-ordinal short-circuit on `address-of m == 0`, so they returned 0
-// for every input, and copy-sx-text decides durability with `address-of t < b`,
-// so it always shared and never rematerialised -- into a region about to be
-// reclaimed. Finding 31.
-//
-// The 0 was justified by X86_64Compound's note that address-of "silently
-// answers 0 on any target where it cannot be modelled: that cost the C# arm
-// every tag in this table". That note describes the hazard as a cost, not a
-// licence, and this is not such a target -- one flat region and pointers into
-// it is exactly the shape bare metal has.
-//
-// HEAP-RELATIVE, not a host pointer: the answers are compared against
-// __heap-save values, which are offsets from cx_heap_base. A raw @intFromPtr
-// would order correctly among itself and be nonsense against those.
-fn cx_address_of(v: anytype) i64 {
-    switch (@typeInfo(@TypeOf(v))) {
-        .int, .comptime_int => return @intCast(v),
-        .bool => return @intFromBool(v),
-        .pointer => |cx_pi| {
-            const cx_p = if (cx_pi.size == .slice) @intFromPtr(v.ptr) else @intFromPtr(v);
-            const cx_base = @intFromPtr(cx_heap_base());
-            return if (cx_p >= cx_base) @intCast(cx_p - cx_base) else 0;
-        },
-        else => @compileError("zig plug: no address-of for this type"),
-    }
-}
 // The deck is the C# plug's rule (_Buf.deck_enter/deck_exit): the
 // outermost enter parks the bump pointer in the bivy and swaps the deck
 // pointer in; the outermost exit swaps back. Deck position is observable
@@ -513,15 +268,6 @@ var cx_deck_top: i64 = 0;
 var cx_deck_best: i64 = 0;
 var cx_deck_stride: i64 = 0;
 var cx_deck_armed: bool = false;
-// Measurement-only headroom, added to the lift that follows __deck-set so
-// the deck can run PAST its reservation without meeting the main frontier.
-// Zero in every normal build, and it must stay zero in anything banked: it
-// changes __deck-pos, which the depot can observe. The point of it is that the
-// guard fires at the FIRST crossing, and a first crossing tells you only that
-// demand exceeded the reservation -- the deficit it reports is bounded by one
-// allocation and is therefore always about zero. Slack lets the program finish
-// so the TRUE peak is knowable.
-const cx_deck_slack: i64 = 0;
 // STDOUT, never stderr. stderr carries the program's output and every
 // comparison in the ladder diffs it, so a measurement written there would
 // corrupt the thing being measured. Raw write syscall rather than
@@ -536,147 +282,6 @@ fn cx_deck_report() void {
     var cx_b: [224]u8 = undefined;
     const cx_s = std.fmt.bufPrint(&cx_b, "CX-DECK used={d} reserved={d} headroom={d} base={d} peak={d} best={d}\n", .{ cx_used, cx_deck_top - cx_deck_base, cx_deck_top - cx_deck_hw, cx_deck_base, cx_deck_hw, cx_deck_best }) catch return;
     _ = std.os.linux.write(1, cx_s.ptr, cx_s.len);
-}
-fn cx_deck_enter() i64 {
-    if (cx_nest == 0) {
-        cx_bivy = cx_hp;
-        cx_hp = cx_dptr;
-    }
-    cx_nest += 1;
-    return 0;
-}
-fn cx_deck_exit() i64 {
-    cx_nest -= 1;
-    if (cx_nest == 0) {
-        cx_dptr = cx_hp;
-        cx_hp = cx_bivy;
-        cx_deck_report();
-    }
-    return 0;
-}
-fn cx_deck_pos() i64 {
-    return cx_dptr;
-}
-fn cx_deck_set(p: i64) i64 {
-    cx_dptr = p;
-    cx_deck_base = p;
-    cx_deck_hw = p;
-    cx_deck_top = 0;
-    cx_deck_stride = 0;
-    cx_deck_best = 0;
-    cx_deck_armed = true;
-    return 0;
-}
-// The I/O boundary. Codex text is CCE everywhere inside -- on bare metal
-// and here alike -- so these convert at the edge and nowhere else: bytes
-// arriving become CCE, bytes leaving are already what they are. std.fs in
-// 0.16 wants an Io the generated main has no reason to carry, so this uses
-// the raw syscalls.
-fn cx_utf8_to_cce(bytes: []const u8) []const u8 {
-    var out: std.ArrayListUnmanaged(u8) = .empty;
-    var i: usize = 0;
-    while (i < bytes.len) {
-        const n = std.unicode.utf8ByteSequenceLength(bytes[i]) catch @panic("cx_utf8_to_cce: bad utf8");
-        const cp = std.unicode.utf8Decode(bytes[i..][0..n]) catch @panic("cx_utf8_to_cce: bad utf8");
-        cx_cce_frame(cx_cp_to_cce(cp), &out);
-        i += n;
-    }
-    return out.items;
-}
-fn cx_read_file_uni(path_cce: []const u8) []const u8 {
-    const al = cx_gpa;
-    const path = cx_cce_to_utf8(path_cce);
-    const z = al.allocSentinel(u8, path.len, 0) catch @panic("oom");
-    @memcpy(z, path);
-    const rc = std.os.linux.openat(-100, z.ptr, .{ .ACCMODE = .RDONLY }, 0);
-    if (@as(isize, @bitCast(rc)) < 0) @panic("cx_read_file_uni: cannot open");
-    const fd: i32 = @intCast(rc);
-    defer _ = std.os.linux.close(fd);
-    var raw: std.ArrayListUnmanaged(u8) = .empty;
-    var chunk: [65536]u8 = undefined;
-    while (true) {
-        const n = std.os.linux.read(fd, &chunk, chunk.len);
-        if (@as(isize, @bitCast(n)) < 0) @panic("cx_read_file_uni: read failed");
-        if (n == 0) break;
-        raw.appendSlice(al, chunk[0..n]) catch @panic("oom");
-    }
-    return cx_utf8_to_cce(raw.items);
-}
-fn cx_write_all(bytes: []const u8) void {
-    var off: usize = 0;
-    while (off < bytes.len) {
-        const n = std.os.linux.write(1, bytes.ptr + off, bytes.len - off);
-        if (@as(isize, @bitCast(n)) <= 0) @panic("cx_write_all: write failed");
-        off += n;
-    }
-}
-fn cx_write_binary(vs: anytype) void {
-    const al = cx_gpa;
-    var out: std.ArrayListUnmanaged(u8) = .empty;
-    for (vs.items.items) |v| out.append(al, @intCast(@mod(v, 256))) catch @panic("oom");
-    cx_write_all(out.items);
-}
-fn cx_write_binary_buf(b: i64, off: i64, len: i64) void {
-    cx_buf_want(b + off + len);
-    const s: usize = @intCast(b + off);
-    cx_write_all(cx_heap_mem[s .. s + @as(usize, @intCast(len))]);
-}
-// variant-tag is the constructor's 0-based declaration index: bare
-// metal loads word 0 of the variant block (emit-variant-tag-builtin) and
-// writes find-ctor-tag there, and a union(enum)'s tag is numbered the same
-// way by declaration order. Self-recursive variants are pointers here, so
-// the pointer case dereferences first.
-fn cx_vtag(v: anytype) i64 {
-    return switch (@typeInfo(@TypeOf(v))) {
-        .pointer => @intCast(@intFromEnum(v.*)),
-        else => @intCast(@intFromEnum(v)),
-    };
-}
-fn cx_buf_write_byte(b: i64, off: i64, v: i64) i64 {
-    cx_buf_want(b + off + 1);
-    cx_heap_mem[@intCast(b + off)] = @intCast(@mod(v, 256));
-    return off + 1;
-}
-fn cx_buf_write_bytes(b: i64, off: i64, vs: anytype) i64 {
-    const n: i64 = @intCast(vs.items.items.len);
-    cx_buf_want(b + off + n);
-    for (vs.items.items, 0..) |v, i| cx_heap_mem[@as(usize, @intCast(b + off)) + i] = @intCast(@mod(v, 256));
-    return off + n;
-}
-fn cx_peek_byte(b: i64, off: i64) i64 {
-    cx_buf_want(b + off + 1);
-    return cx_heap_mem[@intCast(b + off)];
-}
-fn cx_buf_read_bytes(b: i64, off: i64, n: i64) *CxList(i64) {
-    cx_buf_want(b + off + n);
-    const l = cx_ll_empty(i64);
-    l.items.ensureTotalCapacity(cx_gpa, @intCast(n)) catch @panic("oom");
-    var cx_j: i64 = 0;
-    while (cx_j < n) : (cx_j += 1) l.items.appendAssumeCapacity(cx_heap_mem[@as(usize, @intCast(b + off + cx_j))]);
-    return l;
-}
-fn cx_shru(a: i64, b: i64) i64 {
-    return @bitCast(@as(u64, @bitCast(a)) >> @as(u6, @intCast(b & 63)));
-}
-// int-mod is Euclidean, so the result lands in [0, |b|) regardless of
-// either sign, where @rem takes the dividend's sign.
-fn cx_mod(a: i64, b: i64) i64 {
-    const m = if (b < 0) -b else b;
-    const r = @rem(a, m);
-    return if (r < 0) r + m else r;
-}
-fn cx_text_eq(a: []const u8, b: []const u8) bool {
-    return std.mem.eql(u8, a, b);
-}
-// Classification is banded in CCE: 13..64 are the ASCII letters, 65..96
-// the punctuation between, 97..127 the accented Latin and Cyrillic
-// letters, 3..12 the digits -- the same two-band test bare metal's
-// emit-is-letter-builtin encodes.
-fn cx_is_letter(c: i64) bool {
-    return (c >= 13 and c <= 64) or (c >= 97 and c <= 127);
-}
-fn cx_is_digit(c: i64) bool {
-    return c >= 3 and c <= 12;
 }
 fn cx_new(v: anytype) *@TypeOf(v) {
     const p = cx_gpa.create(@TypeOf(v)) catch @panic("oom");
@@ -713,62 +318,6 @@ fn cx_concat(a: []const u8, b: []const u8) []const u8 {
     }
     return std.mem.concat(cx_gpa, u8, &.{ a, b }) catch @panic("oom");
 }
-fn cx_text_starts_with(s: []const u8, p: []const u8) bool {
-    return std.mem.startsWith(u8, s, p);
-}
-fn cx_text_contains(h: []const u8, n: []const u8) bool {
-    return std.mem.indexOf(u8, h, n) != null;
-}
-fn cx_text_concat_list(l: anytype) []const u8 {
-    var out = std.ArrayListUnmanaged(u8).empty;
-    for (l.items.items) |p| out.appendSlice(cx_gpa, p) catch @panic("oom");
-    return out.items;
-}
-fn cx_list_set_at(l: anytype, i: i64, v: anytype) @TypeOf(l) {
-    l.items.items[@intCast(i)] = v;
-    return l;
-}
-// Text is CCE here, so a decimal digit is byte 3 + d and minus is 73;
-// parsing this as ASCII would silently read zero.
-fn cx_text_to_integer(s: []const u8) i64 {
-    var acc: i64 = 0;
-    var neg = false;
-    for (s, 0..) |b, i| {
-        if (i == 0 and b == 73) { neg = true; continue; }
-        if (b < 3 or b > 12) break;
-        acc = acc *% 10 +% @as(i64, b - 3);
-    }
-    return if (neg) -%acc else acc;
-}
-fn cx_text_replace(s: []const u8, a: []const u8, b: []const u8) []const u8 {
-    if (a.len == 0) return cx_text_dup(s);
-    var out = std.ArrayListUnmanaged(u8).empty;
-    var i: usize = 0;
-    while (i < s.len) {
-        if (i + a.len <= s.len and std.mem.eql(u8, s[i .. i + a.len], a)) {
-            out.appendSlice(cx_gpa, b) catch @panic("oom");
-            i += a.len;
-        } else {
-            out.append(cx_gpa, s[i]) catch @panic("oom");
-            i += 1;
-        }
-    }
-    return out.items;
-}
-fn cx_text_split(s: []const u8, sep: []const u8) *CxList([]const u8) {
-    const out = cx_ll_empty([]const u8);
-    if (sep.len == 0) {
-        _ = cx_ll_push(out, cx_text_dup(s));
-        return out;
-    }
-    var start: usize = 0;
-    while (std.mem.indexOfPos(u8, s, start, sep)) |p| {
-        _ = cx_ll_push(out, cx_text_dup(s[start..p]));
-        start = p + sep.len;
-    }
-    _ = cx_ll_push(out, cx_text_dup(s[start..]));
-    return out;
-}
 const cce_table = [128]u32{ 0, 10, 32, 48, 49, 50, 51, 52, 53, 54, 55, 56, 57, 101, 116, 97, 111, 105, 110, 115, 104, 114, 100, 108, 99, 117, 109, 119, 102, 103, 121, 112, 98, 118, 107, 106, 120, 113, 122, 69, 84, 65, 79, 73, 78, 83, 72, 82, 68, 76, 67, 85, 77, 87, 70, 71, 89, 80, 66, 86, 75, 74, 88, 81, 90, 46, 44, 33, 63, 58, 59, 39, 34, 45, 40, 41, 43, 61, 42, 60, 62, 47, 64, 35, 38, 95, 92, 124, 91, 93, 123, 125, 126, 96, 94, 36, 37, 233, 232, 234, 235, 225, 224, 226, 228, 243, 244, 246, 250, 252, 241, 231, 237, 1072, 1086, 1077, 1080, 1085, 1090, 1089, 1088, 1074, 1083, 1082, 1084, 1076, 1087, 1091 };
 // The multi-byte tiers, from Foreword CCE (which the compiler inlines in
 // X86_64State): codes 128..2175 frame as two bytes and name eleven
@@ -799,52 +348,6 @@ fn cx_cce_to_cp(c: i64) i64 {
         }
     }
     return 65533;
-}
-// A codepoint no tier covers becomes `?`, CCE 68. Bare metal does
-// exactly this and does it silently -- asked for char-code-at on U+22A2
-// it answers 68, text-length 1, and prints `?` on the way out. The
-// substitution is lossy and is upstream's choice, not ours; refusing
-// instead made the native loop abort five seconds into the 2.5 MB fibx
-// subject over one turnstile in type-theory prose, while bare metal
-// compiled the same file. Matching the code matters as much as matching
-// the policy: the encoding is observable, so a different substitute
-// diverges on every text that carries an uncovered character.
-fn cx_cp_to_cce(cp: i64) i64 {
-    for (cce_table, 0..) |u, i| {
-        if (u == cp) return @intCast(i);
-    }
-    const u: u32 = @intCast(cp);
-    for (cce_t1_code, cce_t1_size, cce_t1_uni) |start, size, uni| {
-        if (u >= uni and u < uni + size) return @intCast(start + (u - uni));
-    }
-    var base: u32 = 2176;
-    for (cce_t2_uni, cce_t2_size) |uni, size| {
-        if (u >= uni and u < uni + size) return @intCast(base + (u - uni));
-        base += size;
-    }
-    return 68;
-}
-fn cx_cce_frame(code: i64, out: *std.ArrayListUnmanaged(u8)) void {
-    const al = cx_gpa;
-    const c: u32 = @intCast(code);
-    if (c < 128) {
-        out.append(al, @intCast(c)) catch @panic("oom");
-    } else if (c < 2176) {
-        const v = c - 128;
-        out.append(al, @intCast(192 + (v >> 6))) catch @panic("oom");
-        out.append(al, @intCast(128 + (v & 63))) catch @panic("oom");
-    } else if (c < 67712) {
-        const v = c - 2176;
-        out.append(al, @intCast(224 + (v >> 12))) catch @panic("oom");
-        out.append(al, @intCast(128 + ((v >> 6) & 63))) catch @panic("oom");
-        out.append(al, @intCast(128 + (v & 63))) catch @panic("oom");
-    } else {
-        const v = c - 67712;
-        out.append(al, @intCast(240 + (v >> 18))) catch @panic("oom");
-        out.append(al, @intCast(128 + ((v >> 12) & 63))) catch @panic("oom");
-        out.append(al, @intCast(128 + ((v >> 6) & 63))) catch @panic("oom");
-        out.append(al, @intCast(128 + (v & 63))) catch @panic("oom");
-    }
 }
 fn cx_cce_to_utf8(s: []const u8) []const u8 {
     var out: std.ArrayListUnmanaged(u8) = .empty;
