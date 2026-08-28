@@ -1,3 +1,94 @@
+fn Tup2(comptime a_: type, comptime b_: type) type {
+    return union(enum) {
+    MkTup2: struct { a_, b_ },
+    };
+}
+
+fn Tup3(comptime a_: type, comptime b_: type, comptime c_: type) type {
+    return union(enum) {
+    MkTup3: struct { a_, b_, c_ },
+    };
+}
+
+fn Tup4(comptime a_: type, comptime b_: type, comptime c_: type, comptime d_: type) type {
+    return union(enum) {
+    MkTup4: struct { a_, b_, c_, d_ },
+    };
+}
+
+fn Tup5(comptime a_: type, comptime b_: type, comptime c_: type, comptime d_: type, comptime e_: type) type {
+    return union(enum) {
+    MkTup5: struct { a_, b_, c_, d_, e_ },
+    };
+}
+
+const ScoreS = struct {
+    v_: i64,
+};
+const Score = *ScoreS;
+
+fn fib(n_: i64) i64 {
+    return (if ((n_ < 2)) n_ else (fib((n_ -% 1)) +% fib((n_ -% 2))));
+}
+
+fn sum_to(n_: i64) i64 {
+    return @as(i64, (if ((n_ == 0)) 0 else (n_ +% sum_to((n_ -% 1)))));
+}
+
+fn triple(x: i64) i64 {
+    return (x *% 3);
+}
+
+fn size_of(n_: i64) []const u8 {
+    return switch (n_) { 0 => "\x12\x10\x12\x0d", 1 => "\x10\x12\x0d", else => (if ((n_ < 10)) "\x1c\x0d\x1b" else "\x1a\x0f\x12\x1e"),  };
+}
+
+fn q_abs(x: i64) i64 {
+    return (if ((x < 0)) (-%x) else x);
+}
+
+fn q_ok(row: i64, placed: *CxList(i64), i_: i64) bool {
+    var _tl_i = i_;
+    while (true) {
+        if ((_tl_i == cx_list_len(placed))) { return true; } else { const r_: i64 = cx_list_at(placed, _tl_i); if ((r_ == row)) { return false; } else { if ((q_abs((r_ -% row)) == (_tl_i +% 1))) { return false; } else { { const _tj4_2 = (_tl_i +% 1); _tl_i = _tj4_2; continue; } } } }
+    }
+}
+
+fn q_rows(row: i64, placed: *CxList(i64)) i64 {
+    return @as(i64, (if ((row > 8)) 0 else b1: { const here: i64 = @as(i64, (if (q_ok(row, placed, 0)) q_solve(cx_ll_concat(cx_ll_of(i64, &[_]i64{ row }), placed)) else 0)); break :b1 (here +% q_rows((row +% 1), placed)); }));
+}
+
+fn q_solve(placed: *CxList(i64)) i64 {
+    return @as(i64, (if ((cx_list_len(placed) == 8)) 1 else q_rows(1, placed)));
+}
+
+fn opening() void {
+    return b0: { _ = cx_print_line("\x14\x0d\x17\x17\x10\x42\x02\x1b\x10\x15\x17\x16"); _ = cx_print_line(cx_concat("\x13\x11\x24\x49\x0e\x11\x1a\x0d\x13\x49\x13\x0d\x21\x0d\x12\x45\x02", cx_show_int((6 *% 7)))); _ = cx_print_line(cx_concat("\x0d\x11\x1d\x14\x0e\x49\x25\x19\x0d\x0d\x12\x13\x45\x02", cx_show_int(q_solve(cx_ll_empty(i64))))); _ = cx_print_line(cx_concat("\x1c\x11\x20\x49\x04\x08\x45\x02", cx_show_int(fib(15)))); _ = cx_print_line(cx_concat("\x13\x19\x1a\x49\x0e\x10\x49\x04\x03\x03\x45\x02", cx_show_int(sum_to(100)))); _ = cx_print_line(cx_concat("\x0e\x1b\x11\x18\x0d\x49\x0e\x15\x11\x1f\x17\x0d\x49\x0a\x45\x02", cx_show_int(triple(triple(7))))); _ = cx_print_line(cx_concat(cx_concat(cx_concat(cx_concat(cx_concat(cx_concat(cx_concat("\x13\x11\x26\x0d\x49\x10\x1c\x45\x02", size_of(0)), "\x51"), size_of(1)), "\x51"), size_of(5)), "\x51"), size_of(50))); _ = cx_print_line(cx_concat("\x18\x17\x0f\x1a\x1f\x0d\x16\x49\x05\x08\x03\x45\x02", cx_show_int((cx_new(ScoreS{ .v_ = std.math.clamp(250, 0, 100) })).v_))); _ = b1: { const xs = cx_ll_concat(cx_ll_of(i64, &[_]i64{ 1, 2, 3 }), cx_ll_of(i64, &[_]i64{ 4, 5 })); break :b1 cx_print_line(cx_concat("\x17\x11\x13\x0e\x49\x17\x0d\x12\x1d\x0e\x14\x45\x02", cx_show_int(cx_list_len(xs)))); }; break :b0; };
+}
+
+fn cx_entry() void {
+    opening();
+}
+
+pub fn main() void {
+    const stack_bytes: usize = 512 * 1024 * 1024;
+    const t = std.Thread.spawn(.{ .stack_size = stack_bytes }, cx_entry, .{}) catch @panic("spawn");
+    t.join();
+}
+
+// ========================================================================
+// THE PRELUDE. Everything ABOVE this line is the transpiled program.
+//
+// What follows is fixed runtime support, emitted into every file this plug
+// produces and identical in all of them: the bump allocator and its heap,
+// the list and text builtins, the CCE tables, the deck.
+//
+// It is at the BOTTOM so that the code you came to read is the first thing
+// in the file, and so a diff between two emitted programs opens on what
+// differs rather than on hundreds of identical lines. Zig does not order
+// declarations at container scope, so this costs nothing.
+// ========================================================================
+
 const std = @import("std");
 
 // cx_gpa and the heap it allocates from live beside the buffer
@@ -814,80 +905,3 @@ fn cx_print(s: []const u8) void {
     std.debug.print("{s}", .{cx_cce_to_utf8(s)});
 }
 
-fn Tup2(comptime a_: type, comptime b_: type) type {
-    return union(enum) {
-    MkTup2: struct { a_, b_ },
-    };
-}
-
-fn Tup3(comptime a_: type, comptime b_: type, comptime c_: type) type {
-    return union(enum) {
-    MkTup3: struct { a_, b_, c_ },
-    };
-}
-
-fn Tup4(comptime a_: type, comptime b_: type, comptime c_: type, comptime d_: type) type {
-    return union(enum) {
-    MkTup4: struct { a_, b_, c_, d_ },
-    };
-}
-
-fn Tup5(comptime a_: type, comptime b_: type, comptime c_: type, comptime d_: type, comptime e_: type) type {
-    return union(enum) {
-    MkTup5: struct { a_, b_, c_, d_, e_ },
-    };
-}
-
-const ScoreS = struct {
-    v_: i64,
-};
-const Score = *ScoreS;
-
-fn fib(n_: i64) i64 {
-    return (if ((n_ < 2)) n_ else (fib((n_ -% 1)) +% fib((n_ -% 2))));
-}
-
-fn sum_to(n_: i64) i64 {
-    return @as(i64, (if ((n_ == 0)) 0 else (n_ +% sum_to((n_ -% 1)))));
-}
-
-fn triple(x: i64) i64 {
-    return (x *% 3);
-}
-
-fn size_of(n_: i64) []const u8 {
-    return switch (n_) { 0 => "\x12\x10\x12\x0d", 1 => "\x10\x12\x0d", else => (if ((n_ < 10)) "\x1c\x0d\x1b" else "\x1a\x0f\x12\x1e"),  };
-}
-
-fn q_abs(x: i64) i64 {
-    return (if ((x < 0)) (-%x) else x);
-}
-
-fn q_ok(row: i64, placed: *CxList(i64), i_: i64) bool {
-    var _tl_i = i_;
-    while (true) {
-        if ((_tl_i == cx_list_len(placed))) { return true; } else { const r_: i64 = cx_list_at(placed, _tl_i); if ((r_ == row)) { return false; } else { if ((q_abs((r_ -% row)) == (_tl_i +% 1))) { return false; } else { { const _tj4_2 = (_tl_i +% 1); _tl_i = _tj4_2; continue; } } } }
-    }
-}
-
-fn q_rows(row: i64, placed: *CxList(i64)) i64 {
-    return @as(i64, (if ((row > 8)) 0 else b1: { const here: i64 = @as(i64, (if (q_ok(row, placed, 0)) q_solve(cx_ll_concat(cx_ll_of(i64, &[_]i64{ row }), placed)) else 0)); break :b1 (here +% q_rows((row +% 1), placed)); }));
-}
-
-fn q_solve(placed: *CxList(i64)) i64 {
-    return @as(i64, (if ((cx_list_len(placed) == 8)) 1 else q_rows(1, placed)));
-}
-
-fn opening() void {
-    return b0: { _ = cx_print_line("\x14\x0d\x17\x17\x10\x42\x02\x1b\x10\x15\x17\x16"); _ = cx_print_line(cx_concat("\x13\x11\x24\x49\x0e\x11\x1a\x0d\x13\x49\x13\x0d\x21\x0d\x12\x45\x02", cx_show_int((6 *% 7)))); _ = cx_print_line(cx_concat("\x0d\x11\x1d\x14\x0e\x49\x25\x19\x0d\x0d\x12\x13\x45\x02", cx_show_int(q_solve(cx_ll_empty(i64))))); _ = cx_print_line(cx_concat("\x1c\x11\x20\x49\x04\x08\x45\x02", cx_show_int(fib(15)))); _ = cx_print_line(cx_concat("\x13\x19\x1a\x49\x0e\x10\x49\x04\x03\x03\x45\x02", cx_show_int(sum_to(100)))); _ = cx_print_line(cx_concat("\x0e\x1b\x11\x18\x0d\x49\x0e\x15\x11\x1f\x17\x0d\x49\x0a\x45\x02", cx_show_int(triple(triple(7))))); _ = cx_print_line(cx_concat(cx_concat(cx_concat(cx_concat(cx_concat(cx_concat(cx_concat("\x13\x11\x26\x0d\x49\x10\x1c\x45\x02", size_of(0)), "\x51"), size_of(1)), "\x51"), size_of(5)), "\x51"), size_of(50))); _ = cx_print_line(cx_concat("\x18\x17\x0f\x1a\x1f\x0d\x16\x49\x05\x08\x03\x45\x02", cx_show_int((cx_new(ScoreS{ .v_ = std.math.clamp(250, 0, 100) })).v_))); _ = b1: { const xs = cx_ll_concat(cx_ll_of(i64, &[_]i64{ 1, 2, 3 }), cx_ll_of(i64, &[_]i64{ 4, 5 })); break :b1 cx_print_line(cx_concat("\x17\x11\x13\x0e\x49\x17\x0d\x12\x1d\x0e\x14\x45\x02", cx_show_int(cx_list_len(xs)))); }; break :b0; };
-}
-
-fn cx_entry() void {
-    opening();
-}
-
-pub fn main() void {
-    const stack_bytes: usize = 512 * 1024 * 1024;
-    const t = std.Thread.spawn(.{ .stack_size = stack_bytes }, cx_entry, .{}) catch @panic("spawn");
-    t.join();
-}

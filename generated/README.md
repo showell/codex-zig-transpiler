@@ -33,9 +33,10 @@ carrying to save them.
 | `intake/*.blob` | | see below |
 
 `arith.zig` is the one to read first if you want to see what this emitter
-produces. It is 40 KB rather than 2.3 MB, it is a program you can hold in your
+produces. It is 41 KB rather than 2.3 MB, it is a program you can hold in your
 head, and the build compiles and runs it every time and checks all nine lines
-of its output.
+of its output. Every emitted file puts the transpiled program first and the
+fixed prelude last, behind a banner marking the seam.
 
 `codexzig.qemu.zig` and `codexzig.native.zig` are supposed to be identical:
 the emitter emits the same bytes for its own source whether it runs on bare

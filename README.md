@@ -16,9 +16,11 @@ under `generated/` is emitted by the build — nothing there is source — but
 that is exactly why it is worth reading: you can see what this transpiler
 actually produces without running anything.
 
-Start with **[`generated/arith.zig`](generated/arith.zig)**. It is 40 KB, it
-is the transpiled form of [`samples/arith.codex`](samples/arith.codex), and
-the build compiles and runs it on every pass. Here is eight queens, in Codex:
+Start with **[`generated/arith.zig`](generated/arith.zig)**. It is the
+transpiled form of [`samples/arith.codex`](samples/arith.codex), and the build
+compiles and runs it on every pass. **The program is the first 79 lines**; the
+fixed runtime prelude follows it, behind a banner that says so. Here is eight
+queens, in Codex:
 
 ```
   q-solve : List Integer -> Integer
@@ -56,8 +58,15 @@ is CCE-encoded; that one is `hello, world`.
 
 The transpiler itself is in the same directory, as
 [`generated/codexzig.qemu.zig`](generated/codexzig.qemu.zig) — 2.3 MB of zig,
-which is the whole Codex compiler plus the emitter. It is what
-`zig build-exe` turns into a working `codexzig` in two seconds.
+which is the whole Codex compiler plus the emitter, and again the program runs
+first with the prelude underneath. It is what `zig build-exe` turns into a
+working `codexzig` in two seconds.
+
+That layout is a change we made to the emitter rather than something it did
+already: it used to open every file with ~800 lines of prelude and start the
+program past line 840. Zig does not order declarations at container scope, so
+moving it is inert — verified by hand-editing an emitted file before touching
+the plug, and confirmed after by the fixed point.
 
 ## The fixed point
 
