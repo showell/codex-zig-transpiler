@@ -9,6 +9,56 @@ codexzig < prog.codex 2> prog.zig
 That is the whole artifact. This repository builds it, and checks the one
 property that makes it trustworthy.
 
+## The zig it emits
+
+**This is the highlight, and it is checked into the repository.** Everything
+under `generated/` is emitted by the build — nothing there is source — but
+that is exactly why it is worth reading: you can see what this transpiler
+actually produces without running anything.
+
+Start with **[`generated/arith.zig`](generated/arith.zig)**. It is 40 KB, it
+is the transpiled form of [`samples/arith.codex`](samples/arith.codex), and
+the build compiles and runs it on every pass. Here is eight queens, in Codex:
+
+```
+  q-solve : List Integer -> Integer
+  q-solve (placed) = if list-length placed == 8 then 1 else q-rows 1 placed
+```
+
+and the zig that came out:
+
+```zig
+fn q_solve(placed: *CxList(i64)) i64 {
+    return @as(i64, (if ((cx_list_len(placed) == 8)) 1 else q_rows(1, placed)));
+}
+```
+
+That one is a plain translation. The interesting ones are where it is not.
+`q-ok` recurses on itself in the source; the emitter turned the self-call
+into a loop:
+
+```zig
+fn q_ok(row: i64, placed: *CxList(i64), i_: i64) bool {
+    var _tl_i = i_;
+    while (true) {
+        if ((_tl_i == cx_list_len(placed))) { return true; } else { ... }
+    }
+}
+```
+
+`twice triple 7` — a function passed to a function — comes out as
+`triple(triple(7))`, with the higher-order call gone. And a bounded field,
+`v : Integer between 0 and 100 clamping`, becomes
+`std.math.clamp(250, 0, 100)`.
+
+Text literals look like `"\x14\x0d\x17\x17\x10..."` because Codex `Text`
+is CCE-encoded; that one is `hello, world`.
+
+The transpiler itself is in the same directory, as
+[`generated/codexzig.qemu.zig`](generated/codexzig.qemu.zig) — 2.3 MB of zig,
+which is the whole Codex compiler plus the emitter. It is what
+`zig build-exe` turns into a working `codexzig` in two seconds.
+
 ## The fixed point
 
 One loop:
@@ -40,23 +90,13 @@ it either holds or it does not.
 It is not a proof of correctness. It says two independent runs of the same
 emitter, through two different compiler backends, produce the same bytes.
 
-The obvious way to fake that would be a "transpiler" that emits a program
-which just prints its input back — a quine trick. This one isn't, and you can
-check rather than believe. Every build transpiles `samples/arith.codex`,
-compiles the result, runs it, and compares what it printed to
-`samples/arith.expected`:
-
-```
-hello, world
-six-times-seven: 42
-eight-queens: 92
-...
-```
-
-Not one of those numbers appears in that program's source. 92 is the number of
-eight-queens solutions and the emitted zig works it out by backtracking. The
-zig it produced is kept in `generated/arith.zig`, 40 KB and readable, next to
-`generated/codexzig.qemu.zig`, which is the transpiler itself.
+The obvious way to fake it would be a "transpiler" that emits a program which
+just prints its input back — a quine trick. This one isn't, and you can check
+rather than believe: every build transpiles `samples/arith.codex`, compiles
+the result, runs it, and compares all nine lines against
+`samples/arith.expected`. It prints 42, 92, 610 and 5050, none of which
+appear in that program's source, and 92 comes out of a backtracking search.
+The zig is above.
 
 Pass 2 is handed the same *source* as pass 1, not the same blob bytes. A blob
 is that source wrapped in the guest's intake envelope, and the envelope is

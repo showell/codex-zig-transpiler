@@ -5,6 +5,11 @@ one is editing something that will be overwritten without warning. The
 sources are in `../source/` and in the Cobblestone checkout that
 `PROVENANCE` names.
 
+**These files are the point of the repository, not a side effect of it.** They
+are what a Codex compiler emits when it is asked to produce zig, and they are
+checked in so you can read them without an 8 GB box and seven minutes. Start
+with `arith.zig`.
+
 These artifacts are tracked on purpose. The point of this repository is that
 you can read the zig the compiler emits for itself -- and build a working
 transpiler out of it, `zig build-exe generated/codexzig.qemu.zig`, two
