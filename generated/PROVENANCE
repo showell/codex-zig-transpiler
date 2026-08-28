@@ -18,4 +18,5 @@ what each guest was actually handed (intake/):
 no guest ran (every stage was already current)
 
 fixed point  HOLDS
-built in     2s
+arith.codex  MATCHES arith.expected
+built in     5s

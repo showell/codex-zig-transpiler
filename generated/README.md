@@ -27,6 +27,11 @@ carrying to save them.
 | `*.diags` | | what the compiler said while producing each of the above |
 | `intake/*.blob` | | see below |
 
+`arith.zig` is the one to read first if you want to see what this emitter
+produces. It is 40 KB rather than 2.3 MB, it is a program you can hold in your
+head, and the build compiles and runs it every time and checks all nine lines
+of its output.
+
 `codexzig.qemu.zig` and `codexzig.native.zig` are supposed to be identical:
 the emitter emits the same bytes for its own source whether it runs on bare
 metal or as a native binary. That is the fixed point, and it is the one

@@ -25,6 +25,7 @@ fed the transpiler's own IR, and only then is there a zig source to build.
     6  build the binary            zig build-exe -> local/codexzig      host
     7  transpile the same source   codexzig -> codexzig.native.zig      host
     8  diff 5 against 7            THE FIXED POINT
+    9  transpile and run          samples/arith.codex, and check its output
 
 Stage 8 is the invariant this repository exists for. The emitter emits the
 same bytes for its own source whether it is running on bare metal under QEMU
@@ -78,6 +79,13 @@ RINGPLUG_BLOB = INTAKE / 'ringplug-source.codex.blob'
 SUBJECT_BLOB = INTAKE / 'codexzig-subject.codex.blob'
 IR_BLOB = INTAKE / 'codexzig.ir.blob'
 CCE_PAYLOAD = LOCAL / 'codexzig.qemu.zig.cce'
+
+# A real program the transpiler is made to transpile, build and run.
+SAMPLE = HERE / 'samples' / 'arith.codex'
+SAMPLE_EXPECTED = HERE / 'samples' / 'arith.expected'
+SAMPLE_UNIT = LOCAL / 'arith-unit.codex'
+SAMPLE_ZIG = GEN / 'arith.zig'
+SAMPLE_BIN = LOCAL / 'arith'
 
 _t0 = time.time()
 
@@ -227,6 +235,57 @@ def refuse_markers(path):
         die('the emitter could not translate the subject')
 
 
+def run_sample():
+    """Transpile, build and run a real program, and check what it printed.
+
+    The fixed point says the emitter agrees with itself. It cannot, on its
+    own, tell you the emitter is doing anything -- a "transpiler" that emitted
+    a program which just printed its own input would satisfy it perfectly.
+    This is the answer to that: a small Codex program whose output is known,
+    put through the actual artifact.
+
+    None of the numbers it prints appear in its source. 92 is the number of
+    eight-queens solutions and the emitted zig works it out by backtracking.
+    """
+    head('9  transpile and run a real program')
+    r = subprocess.run([str(PWSH), '-NoProfile', '-File',
+                        str(cobblestone.root() / 'build' / 'bundle-app.ps1'),
+                        '-Src', str(SAMPLE), '-Out', str(SAMPLE_UNIT)],
+                       capture_output=True, text=True)
+    if r.returncode != 0 or not SAMPLE_UNIT.is_file():
+        say((r.stdout + r.stderr).strip()[-400:])
+        die(f'could not bundle {SAMPLE.name}')
+
+    SAMPLE_ZIG.unlink(missing_ok=True)
+    with open(SAMPLE_UNIT, 'rb') as fin, open(SAMPLE_ZIG, 'wb') as ferr:
+        subprocess.run([str(CODEXZIG)], stdin=fin,
+                       stdout=subprocess.DEVNULL, stderr=ferr)
+    refuse_bad_transpile(SAMPLE_ZIG, SAMPLE.name)
+    refuse_markers(SAMPLE_ZIG)
+    say(f'{SAMPLE_ZIG.name}: {SAMPLE_ZIG.stat().st_size} bytes')
+
+    build_exe(SAMPLE_ZIG, SAMPLE_BIN)
+    # Read STDERR, not stdout. print-line-uni is cx_print is std.debug.print
+    # in every program this emitter produces, which is the same wart that
+    # makes the transpiler's own invocation `codexzig < in 2> out`. Measured
+    # here: 0 bytes on stdout, all 137 on stderr.
+    out = subprocess.run([str(SAMPLE_BIN)], capture_output=True, text=True)
+    got = out.stderr.strip().splitlines()
+    want = SAMPLE_EXPECTED.read_text().strip().splitlines()
+    for line in got:
+        say('  > ' + line)
+    if got == want:
+        say(f'MATCHES {SAMPLE_EXPECTED.name} -- all {len(want)} lines')
+        return True
+    say(f'DIFFERS from {SAMPLE_EXPECTED.name}:')
+    for i in range(max(len(got), len(want))):
+        g = got[i] if i < len(got) else '<nothing>'
+        w = want[i] if i < len(want) else '<nothing>'
+        if g != w:
+            say(f'  line {i + 1}: got {g!r}, want {w!r}')
+    return False
+
+
 def build_exe(zig_src, out_bin):
     # cwd=local/ so zig's cache lands in the untracked half.
     out_bin.unlink(missing_ok=True)
@@ -366,6 +425,7 @@ def main():
     refuse_bad_transpile(NATIVE_ZIG, 'pass 2, native')
 
     held = fixed_point()
+    ran = run_sample()
 
     intake = ['', 'what each guest was actually handed (intake/):', '']
     for blob in (RINGPLUG_BLOB, SUBJECT_BLOB, IR_BLOB):
@@ -383,10 +443,12 @@ def main():
         'source; edit source/ and rebuild.\n\n'
         + '\n'.join(provenance + intake)
         + f'\n\nfixed point  {"HOLDS" if held else "BROKEN"}\n'
+        + f'{SAMPLE.name:<12} {"MATCHES" if ran else "DIFFERS"} '
+        f'{SAMPLE_EXPECTED.name}\n'
         + f'built in     {time.time() - _t0:.0f}s\n')
-    head('done' if held else 'done -- WITH A BROKEN FIXED POINT')
+    head('done' if held and ran else 'done -- WITH A FAILURE ABOVE')
     say(f'{CODEXZIG}  <  prog.codex  2>  prog.zig')
-    raise SystemExit(0 if held else 1)
+    raise SystemExit(0 if held and ran else 1)
 
 
 if __name__ == '__main__':

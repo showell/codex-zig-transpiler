@@ -37,36 +37,26 @@ minute against the seven the build already spent. It is not a test suite and
 not a comparison against a reference implementation; it is an invariant, and
 it either holds or it does not.
 
-It is not a proof of correctness, but it is far harder to fool than a
-self-hash, and the reason is that **the emitter is its own subject.**
+It is not a proof of correctness. It says two independent runs of the same
+emitter, through two different compiler backends, produce the same bytes.
 
-Holding at all takes a working compiler and a working zig plug. The two
-passes run the same `ZigEmitter` source through *different backends* — pass
-1's emitter compiled by the seed to x86 and run bare metal, pass 2's compiled
-by the zig plug to zig and then built by zig. So a defect in translating any
-construct the compiler itself uses does not merely produce bad output
-somewhere: it corrupts the binary that performs pass 2, and a corrupted
-emitter emits different bytes. **A defect has to survive being applied to
-itself.** Most do not. They produce zig that will not compile at all across
-2.9 MB of compiler source, or zig that compiles into an emitter which then
-disagrees with the one that made it. This repository has only seen the
-property hold at the revision `generated/PROVENANCE` names, and there is no
-reason to assume it held at an arbitrary earlier Update.
+The obvious way to fake that would be a "transpiler" that emits a program
+which just prints its input back — a quine trick. This one isn't, and you can
+check rather than believe. Every build transpiles `samples/arith.codex`,
+compiles the result, runs it, and compares what it printed to
+`samples/arith.expected`:
 
-What can still get through is narrow, and none of it is "inconsistency":
+```
+hello, world
+six-times-seven: 42
+eight-queens: 92
+...
+```
 
-- **Constructs the subject never uses.** The subject is one program and a
-  compiler is an unusual one — that is a breadth gap, and it is the ladder's
-  corpus that covers it, not this.
-- **Emissions that are wrong but neutral here.** A different-but-equivalent
-  form for something the compiler does use: it compiles, the emitter behaves
-  the same, the bytes agree. Wrong against a spec, invisible to this.
-- **Which compiler you built.** Two healthy revisions each hold their own
-  fixed point with different bytes, so agreement never identifies the source.
-  That is what `generated/PROVENANCE` is for.
-
-For anything outside that you want an oracle outside the zig arm — the
-ladder, below.
+Not one of those numbers appears in that program's source. 92 is the number of
+eight-queens solutions and the emitted zig works it out by backtracking. The
+zig it produced is kept in `generated/arith.zig`, 40 KB and readable, next to
+`generated/codexzig.qemu.zig`, which is the transpiler itself.
 
 Pass 2 is handed the same *source* as pass 1, not the same blob bytes. A blob
 is that source wrapped in the guest's intake envelope, and the envelope is
@@ -195,6 +185,8 @@ guest.py        bare metal -- QEMU, the serial ring, the gdbstub
 cobblestone.py  where the sister checkout is, and which one it is
 cce.py          host-side decode of the compressed encoding the guest answers in
 source/         the parts that are ours: two chapter lists and three Codex chapters
+samples/        arith.codex and its expected output -- transpiled, built and
+                run on every build, so the artifact is checked doing real work
 generated/      everything the build emits, tracked, including the binary
                 and the exact blobs bare metal ate -- see generated/README.md
 docs/           how the pipeline works, and what the fixed point does not cover

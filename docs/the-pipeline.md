@@ -18,7 +18,14 @@ Everything below lands in `generated/`.
 
 7  codexzig < codexzig-subject.codex               ->  codexzig.native.zig
 8  diff 5 7                                        ->  THE FIXED POINT
+9  codexzig < samples/arith.codex, build, run     ->  arith.zig + its output
 ```
+
+Stage 9 is not part of the invariant. It is there because the invariant alone
+cannot tell you the emitter does anything: a transpiler that emitted a program
+printing its own input would satisfy it. So a small program with a known
+answer goes through the real artifact, and its output is checked line for
+line.
 
 Each guest is handed a blob from `generated/intake/`: the file named above it,
 wrapped in a mode line and a terminator. The mode line is what makes stage 2

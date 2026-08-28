@@ -24,47 +24,26 @@ clock inside the subject and no fixed point could ever hold.
 
 ## What it does not cover
 
-First, what it is NOT easy to slip past, because the tempting summary --
-"it only checks the emitter against itself, so a consistent bug passes" -- is
-wrong in practice.
+**Whether the emitter is doing anything at all.** The fixed point would be
+satisfied perfectly by a "transpiler" that emitted a program which printed
+its own input back. That is what `samples/arith.codex` is for: a small
+program with a known answer, transpiled, compiled and run on every build,
+whose output is checked line for line. It prints 42, 92, 610 and 5050, none
+of which appear in its source, and 92 comes out of a backtracking search.
 
-The emitter is its own subject. A defect in translating some construct does
-not just corrupt output somewhere off to the side; if the compiler uses that
-construct anywhere in 2.9 MB of source, the defect corrupts **the binary that
-performs pass 2**. A corrupted emitter then emits different bytes than the
-uncorrupted one that built it, and the comparison fails. Add that pass 1's
-emitter comes from the seed's x86 backend and pass 2's from the zig plug's,
-and a defect has to survive being applied to itself, across two backends, and
-still produce zig that compiles at all. Most do not come close.
-
-So the things that DO get through are specific:
-
-**Constructs the subject never uses.** A compiler is a broad program but not
-an exhaustive one. This is a coverage gap rather than a consistency gap, and
-the ladder's corpus is what closes it.
-
-**Emissions that are wrong but neutral here.** A different-but-equivalent
-form for something the compiler does use compiles, leaves the emitter's
-behaviour unchanged, and agrees. Wrong against a specification, invisible to
-this property.
-
-**A wrong answer both backends share.** The canonical shape: code that
-compiles, runs, and returns the wrong number, identically on x86 and in zig.
-Self-application cannot see it. That needs an oracle outside the zig arm, and
-there is one -- the **codex-zig-ladder** compiles the same chapters through
-the seed on bare metal and requires byte agreement across fourteen rungs.
-This repository does not replace it and cannot.
+**Whether the answer is right.** The emitter is its own subject, so a defect
+in translating a construct the compiler uses corrupts the binary that
+performs pass 2, and the comparison fails — most mistakes cannot survive
+being applied to themselves. What survives is narrower: a construct the
+subject never uses, or an emission that is wrong against a specification but
+neutral for the emitter's own execution.
 
 **Which compiler you built.** Two healthy revisions each hold their own fixed
 point, with different bytes, so agreement never identifies the source. Do not
-read this as "it holds at any revision" -- holding requires a working compiler
-and a working plug, and this repository has only seen it hold at the revision
-`generated/PROVENANCE` names. The point is narrower: *given* that it holds,
-that fact alone tells you nothing about which checkout you had.
-
-`generated/PROVENANCE` is the answer to that question and the only one -- it
-names the checkout, its revision, whether that checkout was dirty, and the
-toolchain versions. Read it before quoting a result.
+read that as "it holds at any revision" — holding takes a working compiler and
+a working plug. `generated/PROVENANCE` names the checkout, its revision,
+whether it was dirty, and the toolchain versions. Read it before quoting a
+result.
 
 ## What a break means
 
