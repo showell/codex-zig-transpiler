@@ -36,13 +36,24 @@ metal and requires byte agreement across fourteen rungs. That is a
 comparison against something that does not share the emitter's mistakes.
 This repository does not replace it and cannot.
 
-**Which compiler you built.** Both passes read the same checkout, so the
-property is indifferent to which one it was: build from last month's Update,
-or from a branch someone is mid-experiment on, and it holds there too. It is
-not that any wrongness survives this check — a truncated subject, a chapter
-that failed to bundle, an emitter that halts, all show up. It is specifically
-that the *identity* of the source is not one of the things being compared,
-and identity is exactly what you rely on when quoting a result later.
+**Being wrong consistently.** This is the sharp edge. Both passes use the
+same zig plug, so an edit that changes the emitted zig the *same way* in both
+of them holds the fixed point while changing every byte of the output. What
+the property tests is agreement between two backends, not conformance to
+anything.
+
+The agreement is still worth something, and more than it first looks. Pass 1's
+emitter is `ZigEmitter` compiled by the seed to x86; pass 2's emitter is the
+same source compiled by the zig plug to zig and then built. A plug defect that
+changes how the emitter itself behaves shows up here. Breaking this by editing
+the plug is easy, and that is the property doing its job.
+
+**Which compiler you built.** Two different healthy revisions each hold their
+own fixed point, with different bytes, so agreement never identifies the
+source. Do not read this as "it holds at any revision" — holding requires a
+working compiler and a working plug, and this repository has only seen it hold
+at the revision `generated/PROVENANCE` names. The point is narrower: *given*
+that it holds, that fact alone tells you nothing about which checkout you had.
 
 `generated/PROVENANCE` is the answer to that question and the only one — it
 names the checkout, its revision, whether that checkout was dirty, and the

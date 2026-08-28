@@ -37,13 +37,30 @@ minute against the seven the build already spent. It is not a test suite and
 not a comparison against a reference implementation; it is an invariant, and
 it either holds or it does not.
 
-What it does not tell you is *which* compiler you built. Point
-`$COBBLESTONE_ROOT` at a different revision — a previous Update, a branch
-someone is mid-experiment on — and the property holds just as well there,
-because it only ever compares a build against itself. That is a narrow blind
-spot rather than a general one, but it is a blind spot you can walk into by
-exporting one variable, so every artifact is stamped with the revision it
-came from: `generated/PROVENANCE`.
+It is not a proof of correctness — but it is a demanding property, not a
+weak one, and it is worth being precise about which.
+
+**Holding at all takes a working compiler and a working zig plug.** The two
+passes run the same `ZigEmitter` source through *different backends*: pass 1's
+emitter is compiled by the seed to x86 and runs bare metal, while pass 2's
+emitter is compiled by the zig plug to zig and then built by zig. So a plug
+defect that changes how the emitter itself behaves lands here as a difference.
+Editing the plug breaks this easily, which is the point. This repository has
+only ever seen it hold at the one revision `generated/PROVENANCE` names, and
+there is no reason to assume it held at an arbitrary earlier Update.
+
+**What slips through is being wrong consistently.** Both passes use the same
+plug, so an edit that changes the emitted zig the *same way* in both holds the
+fixed point while changing every byte of the output. The property says the
+emitter agrees with itself across two backends; it does not say the answer is
+right. For that you need an oracle outside the zig arm — see the ladder,
+below.
+
+**And it cannot tell you which compiler you built.** Two different healthy
+revisions each hold their own fixed point, with different bytes, so agreement
+never identifies the source. That is a blind spot you can walk into by
+exporting one variable, which is why every artifact is stamped:
+`generated/PROVENANCE`.
 
 Pass 2 is handed the same *source* as pass 1, not the same blob bytes. A blob
 is that source wrapped in the guest's intake envelope, and the envelope is
