@@ -372,6 +372,12 @@ def main():
         mode = blob.read_bytes().split(b'\n', 1)[0].decode()
         intake.append(f'  {blob.name:<32} {blob.stat().st_size:>9} bytes '
                       f'  mode {mode!r}')
+    if guest.peaks:
+        intake += ['', 'what each guest touched of its cap:', '']
+        for name, peak, cap in guest.peaks:
+            intake.append(f'  {name:<32} {peak:>5} MB of {cap} MB')
+    else:
+        intake += ['', 'no guest ran (every stage was already current)']
     (GEN / 'PROVENANCE').write_text(
         'Everything beside this file is emitted by build.py. Nothing here is\n'
         'source; edit source/ and rebuild.\n\n'

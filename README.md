@@ -54,7 +54,7 @@ binary reads plain Codex on stdin and would choke on the mode line.
 | `qemu-system-x86_64` | any recent | the seed and the emitter run on bare metal |
 | `zig` | 0.16.0 | builds the emitted zig into the binary |
 | `pwsh` | at `~/.local/pwsh/pwsh` | the checkout's own bundler is PowerShell |
-| a quiet box | ~4 GB free RAM | nothing here takes a lock; two 3 GB guests thrash rather than fail |
+| a quiet box | ~4 GB free RAM | see Memory below; nothing here takes a lock, and two guests thrash rather than fail |
 | time | ~7 min cold, 3 s warm | measured: 3 guests in 366s, zig 2s, pass 2 58s; a warm run skips all of it |
 
 `$COBBLESTONE_ROOT` is deliberately **not** `$CODEX_ROOT`. That one belongs
@@ -77,6 +77,70 @@ export COBBLESTONE_ROOT=~/showell_repos/cobblestone-pin
 ./build.py --force         # rebuild every stage, guests included
 ./build.py --check-only    # check the fixed point against what is on disk
 ```
+
+## Memory
+
+This is the requirement most likely to bite, because **a guest that runs out
+of room does not say so.** It parks in `hlt` with nothing on the wire, having
+already done minutes of real work, and looks identical to a slow compile. The
+only evidence is its peak resident size beside its cap, which `build.py`
+prints per stage and records in `generated/PROVENANCE`.
+
+What each stage actually touches of the 3072 MB cap, measured (`build.py`
+prints it per stage and records it in `generated/PROVENANCE`):
+
+| stage | | peak |
+| --- | --- | --- |
+| 2 | compile the ring plug — 304 KB in | 568 MB |
+| 4 | compile the transpiler — 2.9 MB in, 9.9 MB of IR out | **2454 MB** |
+| 5 | transpile it — 9.9 MB of IR in, 2.3 MB of zig out | 916 MB |
+
+| | |
+| --- | --- |
+| guest cap | 3072 MB (`CODEX_MEM_MB`); stage 4 uses 80% of it |
+| host, to build | ~4 GB free — one guest at a time, plus zig |
+| host, to *run* `codexzig` | **3472 MB** on its own 2.9 MB source |
+
+Stage 4 is the binding one and its margin is thinner than it looks: 618 MB.
+
+That last row is a real requirement and not a footnote. Transpiling a large
+program is expensive because the allocator underneath is a bump allocator
+that never frees, so peak demand is the **sum** of every phase's working set
+rather than the largest. `codexzig` on its own source peaks at 3,553,024 kB —
+and note that 2454 + 916 = 3370 lands right beside it, which is the same fact
+seen from the other side.
+
+**The guest cannot simply be made bigger.** The boot stub sets its stack from
+a RAM-size cell and triple-faults on a value it cannot use: 3072 MB boots,
+3584 MB and 3968 MB both die before READY, with QEMU exiting before a byte of
+the banner. `guest.py` refuses a size at or above 4096 MB outright, because
+the cell is four bytes wide and 5120 MB silently becomes 1024.
+
+### Why three guests and not two
+
+The obvious simplification is to put the compiler and the emitter in one
+kernel, so the bootstrap becomes *compile codexzig to a kernel, then use it to
+transpile codexzig*. `experiments/two_guests.py` builds exactly that, and the
+kernel is real — 1,971,047 bytes, compiled clean.
+
+It does not fit, and the numbers leave no room to argue:
+
+```
+guest at 3072 MB    boots, and runs every stage of the real build
+guest at 3584 MB    dies before READY
+guest at 3968 MB    dies before READY
+the workload wants  3472 MB, measured natively
+```
+
+Merged, one guest holds the source, the AST, the IR *and* the emitted text at
+once, over an allocator that never frees — so its peak is the SUM of every
+phase's working set. The boot stub triple-faults on a RAM size it cannot use,
+putting the ceiling between 3072 and 3584, and the merged workload wants
+3472. **There is no guest size that is both bootable and big enough.**
+
+Splitting the front end from the emitter splits that peak across two
+processes, and that is what the third guest buys. It is not a historical
+accident, even though that is how it got here.
 
 ## Just want a working transpiler?
 

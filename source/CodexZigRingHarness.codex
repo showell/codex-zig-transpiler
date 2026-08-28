@@ -41,9 +41,22 @@ Section: Driver
 
  The same pipeline as CodexZigHarness behind a different front door. That
  harness reads `/dev/stdin`, which is a hosted path and means nothing to a
- program running on bare metal; this one reads the compiler's own serial
- ring, the way ZigPlugRing does, and answers on the same wire -- a SIZE:
- line then the payload as raw CCE bytes.
+ program with no OS under it. This one reads its unit exactly the way the
+ seed's own driver does (opening.codex:2188-2189) -- `read-file-uni mode`,
+ then `utf8-to-cce` -- and answers on ZigPlugRing's wire, a SIZE: line then
+ the payload as raw CCE bytes.
+
+ Taking the driver's intake rather than ZigPlugRing's is the correction that
+ made this work, and the reason is the encoding. `read-serial-cce` converts
+ NOTHING: it copies raw bytes until a NUL, because its caller is a wire that
+ already speaks CCE, which is true of an IR file the seed emitted and false
+ of Codex source. Fed plain source it produced 37,688 bytes of bare prelude
+ -- a parse of garbage -- rather than failing. `utf8-to-cce` is the
+ conversion, it lives in Emit/X86_64State.codex, and this bundle already
+ carries that chapter. The alternative was a host-side unicode-to-CCE
+ encoder, which would have had to reimplement upstream's table for the five
+ non-ASCII characters in the subject (é, Γ, ε, τ, ⊢) and would have been a
+ fork of an encoding.
 
  The point of it is to find out whether the bootstrap needs three guests or
  two. Today the front end runs in one guest (seed -> IR text) and the emitter
@@ -68,8 +81,9 @@ Section: Driver
 
   czr-emit : Text -> [Console, FileSystem] Nothing
   czr-emit (mode) = act
-    src <- read-serial-cce mode
-    let mountain-base = init-phase-allocator
+    src-raw <- read-file-uni mode
+    let src = utf8-to-cce src-raw
+    in let mountain-base = init-phase-allocator
     in let deck-base = __heap-save
     in let deck-set = __deck-set deck-base
     in let deck-adv = __heap-advance 536870912

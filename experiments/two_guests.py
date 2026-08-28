@@ -1,5 +1,28 @@
 #!/usr/bin/env python3
-"""Can the bootstrap be two guests instead of three?
+"""Can the bootstrap be two guests instead of three? NO -- it does not fit.
+
+SETTLED, and kept because the measurement is what justifies the three-guest
+shape. The merged kernel BUILDS and is correct as far as it gets; what stops
+it is memory, and the ceiling is not negotiable:
+
+    guest at 3072 MB    boots, and runs every stage of the real build
+    guest at 3584 MB    dies before READY
+    guest at 3968 MB    dies before READY
+    the workload wants  3472 MB (3,553,024 kB), measured natively
+
+The boot stub triple-faults on a RAM size it cannot use, so the ceiling sits
+between 3072 and 3584 while the merged workload wants 3472. There is no value
+that is both bootable and big enough. Running this now gets as far as GUEST 2
+and dies there on purpose.
+
+Two of the three failures along the way were mistakes rather than results,
+and both are recorded where they happened: `CDX map` gives a 2.9 MB unit deck
+scale 100 because derive-deck-scale clamps there (MODE_CDX_DECKS below), and
+read-serial-cce converts nothing, so feeding it plain source yields 37,688
+bytes of bare prelude rather than an error (CodexZigRingHarness.codex).
+
+--- the original question ---
+
 
 Today it is three: compile the emitter to a kernel, compile the transpiler's
 source to IR text, run the kernel over that IR. The middle one is the only
@@ -47,10 +70,41 @@ FEED_BLOB = OUT / 'codexzig-subject.codex.blob'
 PAYLOAD = OUT / 'two-guest.zig.cce'
 RESULT_ZIG = OUT / 'codexzig.two-guest.zig'
 
-# read-serial-cce ignores its mode argument (see the checkout's own
-# read-serial-rt.codex, which passes "ignored"), so this only has to be a
-# line the kernel can consume before the payload starts.
+# The kernel reads its unit the way the seed does -- read-file-uni then
+# utf8-to-cce -- so the payload is PLAIN UTF-8 source ending in EOT, exactly
+# the shape the seed is fed. The mode line is read by read-line, which ends
+# on ASCII 10.
 MODE_CODEX = b'RING codex\n'
+
+# decks= is a PERCENTAGE scale on every deck reservation, parsed off the mode
+# line independently of the base mode (opening.codex:60), and it is why the
+# first attempt at this failed. Without the flag the scale is DERIVED from
+# unit length -- and derive-deck-scale clamps at 100 (:135), so a 2.9 MB unit
+# gets 100 whatever its size. The hosted build asks for 172 explicitly. Plain
+# `CDX map` gave the merged kernel 100 and CHECK overflowed its floor
+# (CDX9002, measured). 172 is the value already proven against this source.
+#
+# The three-guest build never hits this because its only `CDX map` compile is
+# the 304 KB ring plug, which fits inside 100 comfortably.
+MODE_CDX_DECKS = b'CDX map decks=172\n'
+
+# Guest 2 runs the whole compiler AND the emitter in one address space, over a
+# bump allocator that never frees, so its peak is the SUM of every phase's
+# working set rather than the largest. Measured: the native binary doing this
+# exact job peaks at 3.39 GB, so the 3072 MB default cannot hold it -- the
+# first attempt climbed to 2.49 GB and parked in hlt with nothing on the wire,
+# which is how this guest fails rather than saying so.
+#
+# That is the real cost of the two-guest shape, and it is what the three-guest
+# one buys: splitting the front end from the emitter splits the peak across two
+# processes. Guest 1 is only a compile and stays at the default.
+#
+# 3968 and not more: the guest reads its RAM size from a FOUR-BYTE cell, so
+# 4096 writes zero and 5120 writes 1024. An attempt at 5120 died at 666 MB
+# looking exactly like the shortage it was meant to cure. 3968 MB = 0xF8000000
+# is the largest size this mechanism can actually express, and the workload
+# wants 3.4 GB, so this is the whole margin there is.
+GUEST2_MEM_MB = 3584
 
 t0 = time.time()
 
@@ -81,18 +135,34 @@ def main():
 
     say('')
     say('==== GUEST 1: seed compiles it to a kernel')
-    guest.wrap(RING_SUBJECT, guest.MODE_CDX, b'\x04', RING_BLOB)
-    RING_CDX.unlink(missing_ok=True)
-    if not guest.compile_ring(RING_BLOB, RING_CDX, seed, OUT, say=say):
-        raise SystemExit('GUEST 1 FAILED: the seed could not compile it')
-    say(f'kernel: {RING_CDX.stat().st_size} bytes')
+    guest.wrap(RING_SUBJECT, MODE_CDX_DECKS, b'\x04', RING_BLOB)
+    fp = OUT / 'codexzig-ring.cdx.fp'
+    want = build.sha(RING_BLOB) + '\n' + build.sha(seed)
+    if RING_CDX.is_file() and fp.is_file() and fp.read_text().strip() == want:
+        say(f'kernel already answers this blob -- not recompiling '
+            f'({RING_CDX.stat().st_size} bytes)')
+    else:
+        RING_CDX.unlink(missing_ok=True)
+        if not guest.compile_ring(RING_BLOB, RING_CDX, seed, OUT, say=say):
+            say('')
+            say('GUEST 1 FAILED. If it is CDX9002, the deck scale is the knob:')
+            say(f'  mode line was {MODE_CDX_DECKS!r}')
+            raise SystemExit(1)
+        fp.write_text(want + '\n')
+        say(f'kernel: {RING_CDX.stat().st_size} bytes')
 
     say('')
-    say('==== GUEST 2: that kernel transpiles the hosted subject')
-    guest.wrap(build.SUBJECT, MODE_CODEX, b'\x00', FEED_BLOB)
+    say(f'==== GUEST 2: that kernel transpiles the hosted subject '
+        f'({GUEST2_MEM_MB} MB)')
+    guest.wrap(build.SUBJECT, MODE_CODEX, b'\x04', FEED_BLOB)
     PAYLOAD.unlink(missing_ok=True)
-    if not guest.compile_ring(FEED_BLOB, PAYLOAD, RING_CDX, OUT, say=say):
-        raise SystemExit('GUEST 2 FAILED: the kernel answered nothing')
+    if not guest.compile_ring(FEED_BLOB, PAYLOAD, RING_CDX, OUT,
+                              mem_mb=GUEST2_MEM_MB, say=say):
+        say('')
+        say('GUEST 2 FAILED. A guest that runs out of room does not say so --')
+        say('it parks in hlt with nothing on the wire. Check its peak RSS')
+        say(f'against the {GUEST2_MEM_MB} MB cap before believing anything else.')
+        raise SystemExit(1)
     guest.decode_zig(PAYLOAD, RESULT_ZIG, say)
 
     say('')

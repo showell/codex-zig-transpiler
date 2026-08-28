@@ -123,3 +123,31 @@ caught loudly by `zig build-exe` if anything ever does. Counting them as
 refusals reports a defect that does not exist: `cx_address_of` once blocked
 every build at this scan from a line in the prelude no subject reaches.
 Anything **not** on that list still stops the build, whatever its spelling.
+
+
+## Why not two guests
+
+Putting the compiler and the emitter in one kernel would make the whole
+bootstrap *compile codexzig to a kernel, then use it to transpile codexzig* —
+one bundle, two guests. `experiments/two_guests.py` builds that kernel and it
+compiles clean.
+
+It cannot run. One guest merged holds the source, the AST, the IR and the
+emitted text at once over an allocator that never frees, so its peak is the
+sum of every phase rather than the largest; measured natively that is 3472 MB.
+The boot stub triple-faults on a RAM size it cannot use, and the ceiling is
+between 3072 MB (boots) and 3584 MB (dies before READY). No size is both
+bootable and big enough.
+
+Two things learned on the way there are worth keeping, because both failed
+*quietly* rather than loudly:
+
+- **`CDX map` gives a 2.9 MB unit deck scale 100.** `derive-deck-scale` clamps
+  at 100 regardless of length (`opening.codex:135`), and the hosted build asks
+  for 172 explicitly. Without the flag, CHECK overflows with CDX9002.
+- **`read-serial-cce` converts nothing.** It copies raw bytes until a NUL,
+  because its caller is a wire that already speaks CCE — true of an IR file
+  the seed emitted, false of Codex source. Fed plain source it produced 37,688
+  bytes of bare prelude, a parse of garbage, and exit 0. The seed's own driver
+  reads a unit with `read-file-uni` then `utf8-to-cce`
+  (`opening.codex:2188-2189`), which is the conversion.

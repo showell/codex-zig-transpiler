@@ -57,6 +57,19 @@ def launch(kernel, mem_mb, extra_args=()):
     fail, they thrash at 2% CPU each and finish in the morning. Check the
     machine is quiet before starting a build on a shared one.
     """
+    # The RAM-size cell below is FOUR BYTES, so a size at or above 4 GB is
+    # not merely unsupported -- it is silently wrong. QEMU writes the low 32
+    # bits, and the guest sizes its stack from what it reads: 5120 MB lands
+    # as 0x140000000 and the guest sees 0x40000000, one gigabyte. Measured,
+    # after an experiment "raised" a guest to 5 GB and it died at 666 MB
+    # looking exactly like the out-of-memory it was supposed to fix. 4096
+    # itself writes zero. Refuse rather than truncate.
+    if mem_mb >= 4096:
+        raise SystemExit(
+            f'CODEX_MEM_MB={mem_mb} is not expressible: the guest reads its '
+            f'RAM size from a 4-byte cell, so it would see '
+            f'{(mem_mb * 1024 * 1024) & 0xFFFFFFFF // 1024 // 1024} MB. '
+            f'Use at most 4032.')
     # Fixed ports collide with leftover guests and with TIME_WAIT across
     # rapid relaunches, so both are dynamic.
     data_port, ctrl_port = free_port(), free_port()
@@ -101,19 +114,40 @@ def launch(kernel, mem_mb, extra_args=()):
     return proc, data, ctrl
 
 
-def wait_ready(ctrl, timeout=300):
+def wait_ready(ctrl, timeout=300, proc=None, mem_mb=None):
     """Block until the kernel says READY.
 
     The EOF check is not decoration. Once QEMU dies the socket returns b''
     instantly and forever, and a loop without it spins at 100% against a
     frozen log until someone kills it by hand.
+
+    A close with NOTHING received is almost always the guest size: the boot
+    stub sets RSP from the RAM cell and triple-faults on a value it cannot
+    use, so QEMU exits before a single byte of the banner. Measured: 3968 MB
+    dies here, 3072 MB boots. Saying `ctrl closed pre-READY: b''` and
+    stopping made that look like a hang for one whole run, so the guest's own
+    last words come out with it.
     """
     ctrl.settimeout(timeout)
     buf = b''
     while b'READY\n' not in buf:
         chunk = ctrl.recv(4096)
         if not chunk:
-            raise RuntimeError(f'ctrl closed pre-READY: {buf!r}')
+            extra = ''
+            if proc is not None:
+                proc.poll()
+                err = b''
+                try:
+                    err = proc.stderr.read() or b''
+                except Exception:
+                    pass
+                extra = (f'\n    qemu exit={proc.returncode}'
+                         f'\n    qemu stderr: {err.decode(errors="replace")[-400:]!r}')
+            if not buf and mem_mb:
+                extra += (f'\n    NOTHING was received. The guest is sized at '
+                          f'{mem_mb} MB; the boot stub triple-faults on a size '
+                          f'it cannot use, and 3072 is the largest known good.')
+            raise RuntimeError(f'ctrl closed pre-READY: {buf!r}{extra}')
         buf += chunk
     return buf
 
@@ -250,7 +284,32 @@ def _feed_ring(gdb, blob, staged, say):
         f'({dry} rounds with no room freed)')
 
 
-def _read_sized(data, timeout, say):
+def peak_rss_mb(pid):
+    """What the guest actually TOUCHED of its cap, from QEMU's VmHWM.
+
+    A lower bound on the guest's demand rather than a measure of it -- the
+    guest's own allocator can refuse before QEMU faults in another page. It is
+    still the number worth watching, because a guest that runs out of room
+    does not say so: it parks in hlt with nothing on the wire, and the peak
+    beside the cap is the only evidence that says why.
+    """
+    try:
+        with open(f'/proc/{pid}/status') as f:
+            for line in f:
+                if line.startswith('VmHWM'):
+                    return int(line.split()[1]) // 1024
+    except OSError:
+        pass
+    return None
+
+
+# Every guest this process ran, as (label, peak_mb, cap_mb). build.py reports
+# it in PROVENANCE, so the memory requirement is a build OUTPUT rather than
+# something somebody remembers.
+peaks = []
+
+
+def _read_sized(data, timeout, say, pid=None):
     """Read the guest's wire: log lines, SIZE:<n>, n bytes, trailer.
 
     Length-driven rather than idle-driven -- the guest stays running after
@@ -258,9 +317,17 @@ def _read_sized(data, timeout, say):
     """
     data.settimeout(5)
     out, needed = b'', None
+    # Sampled INSIDE the loop, because not every guest is alive afterwards.
+    # The seed stays up once it has answered; the ring plug exits, and a
+    # reaped-but-unwaited process still has a /proc entry with no VmHWM in
+    # it -- so sampling after the read reported two peaks out of three and
+    # looked like the instrument working.
+    peak = None
     deadline = time.time() + timeout
     t0 = time.time()
     while time.time() < deadline:
+        if pid is not None:
+            peak = peak_rss_mb(pid) or peak
         try:
             chunk = data.recv(65536)
         except socket.timeout:
@@ -282,11 +349,11 @@ def _read_sized(data, timeout, say):
         if needed is not None and len(out) >= needed:
             data.settimeout(2)   # brief trailer drain (HEAP:/STACK: lines)
     say(f'stream: {len(out)} bytes in {time.time() - t0:.0f}s')
-    return out
+    return out, peak
 
 
 def compile_ring(blob_path, out_path, kernel, scratch=None, timeout=1800,
-                 say=print):
+                 mem_mb=None, say=print):
     """Boot `kernel`, feed it `blob_path`, write its payload to `out_path`.
 
     Returns True on a sized payload. Diagnostics land beside the output as
@@ -313,13 +380,17 @@ def compile_ring(blob_path, out_path, kernel, scratch=None, timeout=1800,
         pathlib.Path(stage_path).write_bytes(blob[:RING_SIZE])
 
     gp = free_port()
-    proc, data, ctrl = launch(kernel, MEM_MB, extra_args=[
+    cap0 = mem_mb or MEM_MB
+    # A guest that runs the whole compiler needs more room than one that only
+    # compiles: the bump allocator never frees, so peak demand is the sum of
+    # every phase's working set, not the largest.
+    proc, data, ctrl = launch(kernel, mem_mb or MEM_MB, extra_args=[
         '-device', f'loader,file={stage_path},addr={hex(RING_ADDR)},force-raw=on',
         '-gdb', f'tcp:127.0.0.1:{gp}',
     ])
     try:
         t0 = time.time()
-        wait_ready(ctrl)
+        wait_ready(ctrl, proc=proc, mem_mb=cap0)
         say(f'READY at {time.time() - t0:.1f}s; injecting wpos={staged}')
 
         gdb = Gdb(gp)
@@ -334,7 +405,12 @@ def compile_ring(blob_path, out_path, kernel, scratch=None, timeout=1800,
             _feed_ring(gdb, blob, staged, say)
         gdb.detach()
 
-        out = _read_sized(data, timeout, say)
+        out, peak = _read_sized(data, timeout, say, pid=proc.pid)
+        cap = mem_mb or MEM_MB
+        peak = peak_rss_mb(proc.pid) or peak
+        if peak is not None:
+            peaks.append((pathlib.Path(out_path).name, peak, cap))
+            say(f'guest peak RSS: {peak} MB of {cap} MB')
         i = out.find(b'SIZE:')
         header = out[:i if i >= 0 else len(out)].decode(errors='replace')
         diags = [l for l in header.splitlines()
