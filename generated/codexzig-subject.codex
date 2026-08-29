@@ -5857,6 +5857,34 @@ Section: Memory Address Map
 
   guard-page-base-addr : Integer = 36320
 
+ 36328 IS THE NIC'S, NOT OURS. `net-driver-poll-cell`
+ (`codex/os/net/NetDriver.codex:96`) has held it since the poll interval was
+ measured rather than assumed; `net-driver-calibrate` writes it with `poke-32`
+ at :70 and `net-driver-poll-interval` reads it at :170. This chapter claimed
+ the same cell for `deck-ceiling-addr` on 2026-08-27 and the claim carried the
+ words "verified unclaimed against codex-vm.c and net-driver-cb", which is
+ exactly as wide as it sounds and no wider: `net-driver-cb` is a BLOCK based at
+ 36264 declaring offsets 0 and 8, so asking where that block ends answers a
+ question about the block and says nothing about a separate scalar the same
+ chapter declares sixty lines further down. Both halves of the collision are
+ real. `build` writes eight bytes here on every reservation and does it whether
+ or not the guard flag is set, so the compiler would silently overwrite the
+ measured poll interval with the low half of a deck address, and every bound in
+ NetworkStack is denominated in those ticks. In the other direction a
+ calibration write drops a small number into the ceiling, every frontier clears
+ it, and an armed guard raises `!EXC=06` on the next allocation. The cell the
+ newcomer takes is the one that moves.
+
+ The check that finds this shape is a MAP of the band rather than a probe of
+ one address: enumerate every literal in [36240, 36420] across all `.codex` and
+ `tools/codex-vm.c`, and confirm the known-taken cells appear before believing
+ that a candidate does not (L-COUNT, and the negative-result half of
+ `check-your-own-instrument`). Run that way, 36336 and 36344 are clear and
+ 36352 appears only as an unrelated `add-ri` displacement at :1611.
+
+  deck-ceiling-addr : Integer = 36336
+  deck-reservation-top-addr : Integer = 36344
+
  Application-processor idle stacks live in low always-present memory,
  never in the demand-paged heap range: an AP takes its first interrupt
  on this stack, and the CPU cannot deliver a fault frame onto a
@@ -9417,6 +9445,24 @@ Section: Compare and Test
   cmp-rr (rd) (rs) =
    [rex-w rs rd, 57, modrm 3 rs rd]
 
+ CMP r64, [disp32]. The SIB no-base form (mod 00, rm 100, index 100, base 101)
+ is the only absolute addressing x86-64 offers without a base register, and
+ needing no scratch register is the whole reason this exists: the deck guard
+ runs at allocation sites where every register is already live.
+
+  cmp-r-abs : Integer, Integer -> List Integer
+  cmp-r-abs (rd) (addr) =
+   [rex-w rd 0, 59, modrm 0 rd 4, sib 0 4 5] & write-i32 addr
+
+ CMP qword [disp32], imm8, the same no-base SIB form with the group-1 opcode
+ and CMP's /7 extension, so the reg field carries the extension and REX.R
+ stays clear. It reads the cell without a scratch register, which is what lets
+ the deck guard ask whether it is armed at all.
+
+  cmp-abs-imm8 : Integer, Integer -> List Integer
+  cmp-abs-imm8 (addr) (imm) =
+   [rex-w 0 0, 131, modrm 0 7 4, sib 0 4 5] & write-i32 addr & write-i8 imm
+
   cmp-ri : Integer, Integer -> List Integer
   cmp-ri (rd) (imm) =
    alu-ri 7 rd imm
@@ -12195,7 +12241,7 @@ Section: Expression Emission
    in let st4 = st-append-code st3 (jcc cc-ne 0)
    in let md = alloc-temp st4
    in let st5 = st-append-code (md.state) (mov-rr (md.reg) reg-r10)
-   in let st6 = st-append-code st5 (add-ri reg-r10 task-desc-size)
+   in let st6 = heap-bump-imm st5 task-desc-size
    in let s1 = alloc-temp st6
    in let st7 = st-append-code (s1.state) (li (s1.reg) 1)
    in let st8 = st-append-code st7 (mov-store (md.reg) (s1.reg) 0)
@@ -12204,7 +12250,7 @@ Section: Expression Emission
    in let st10 = st-append-code st9 (mov-store (s1.reg) (md.reg) 0)
    in let st10a = st-append-code st10 (li (s1.reg) fork-pool-cursor-addr)
    in let st10b = st-append-code st10a (mov-store (s1.reg) reg-r10 0)
-   in let st10c = st-append-code st10b (add-ri reg-r10 fork-pool-reservation)
+   in let st10c = heap-bump-imm st10b fork-pool-reservation
    in patch-jcc-at st10c skip-pos (st10c.code-len)
 
   emit-await : CodegenState, IRExpr -> EmitResult
@@ -13200,7 +13246,7 @@ Section: Expression Emission
    in let st1 = eval.state
    in let arr = alloc-temp st1
    in let st2 = st-append-code (arr.state) (mov-rr (arr.reg) reg-r10)
-   in let st3 = st-append-code st2 (add-ri reg-r10 (n * 8))
+   in let st3 = heap-bump-imm st2 (n * 8)
    in let st4 = emit-concat-many-store-ptrs st3 (eval.locals) 0 n (arr.reg)
    in let st5 = st-append-code st4 (mov-rr reg-rdi (arr.reg))
    in let st6 = st-append-code st5 (li reg-rsi n)
@@ -14975,10 +15021,10 @@ Section: Builtin Emission
     let rd = alloc-temp st
    in let st1 = st-append-code (rd.state) (li reg-r11 0)
    in let st2 = st-append-code st1 (mov-store reg-r10 reg-r11 0)
-   in let st3 = st-append-code st2 (add-ri reg-r10 8)
+   in let st3 = heap-bump-imm st2 8
    in let st4 = st-append-code st3 (mov-rr (rd.reg) reg-r10)
    in let st5 = st-append-code st4 (mov-store reg-r10 reg-r11 0)
-   in let st6 = st-append-code st5 (add-ri reg-r10 8)
+   in let st6 = heap-bump-imm st5 8
    in EmitResult {
    state = st6,
    reg = rd.reg
@@ -14990,7 +15036,7 @@ Section: Builtin Emission
    in let st1 = st-append-code (rd.state) (mov-rr (rd.reg) reg-r10)
    in let st2 = st-append-code st1 (li reg-r11 0)
    in let st3 = st-append-code st2 (mov-store reg-r10 reg-r11 0)
-   in let st4 = st-append-code st3 (add-ri reg-r10 8)
+   in let st4 = heap-bump-imm st3 8
    in EmitResult {
    state = st4,
    reg = rd.reg
@@ -15002,7 +15048,7 @@ Section: Builtin Emission
    in let st0 = st-append-code (len-loaded.state) (mov-rr reg-r11 (len-loaded.reg))
    in let st1 = st-append-code st0 (add-ri reg-r11 15)
    in let st2 = st-append-code st1 (and-ri reg-r11 (-8))
-   in st-append-code st2 (add-rr reg-r10 reg-r11)
+   in heap-bump-reg st2 reg-r11
 
   emit-substring-copy : CodegenState, Integer, Integer, Integer, Integer -> CodegenState
   emit-substring-copy (st) (str-loc) (start-loc) (len-loc) (ptr-loc) =
@@ -15232,7 +15278,7 @@ Section: Builtin Emission
    in let st4 = st-append-code (vr.state) (mov-store (ptr.reg) (vr.reg) 0)
    in let lr = load-local st4 (list-loc.reg)
    in let st5 = st-append-code (lr.state) (mov-store (ptr.reg) (lr.reg) 8)
-   in let st6 = st-append-code st5 (add-ri reg-r10 16)
+   in let st6 = heap-bump-imm st5 16
    in EmitResult {
    state = st6,
    reg = ptr.reg
@@ -15307,7 +15353,7 @@ Section: Builtin Emission
   emit-heap-advance-builtin (st) (args) =
    let r = emit-expr (st-set-tail-pos st False) (list-at args 0)
    in let rd = alloc-temp (r.state)
-   in let st1 = st-append-code (rd.state) (add-rr reg-r10 (r.reg))
+   in let st1 = heap-bump-reg (rd.state) (r.reg)
    in EmitResult {
    state = st-append-code st1 (li (rd.reg) 0),
    reg = rd.reg
@@ -15390,6 +15436,30 @@ Section: Builtin Emission
    reg = rd.reg
   }
 
+ Arming rides the same flag as the guard, so at `deck-guard-enabled` 0 an
+ extent's enter and exit are byte-identical to what they were before the guard
+ existed. Without that test the arming would be emitted into every program
+ whether or not anything reads the cell, and `deck-record` is not rare.
+
+  emit-deck-arm : CodegenState -> CodegenState
+  emit-deck-arm (st) =
+   if deck-guard-enabled == 0 then st
+   else let a0 = alloc-temp st
+   in let st1 = st-append-code (a0.state) (li (a0.reg) deck-reservation-top-addr)
+   in let a1 = alloc-temp st1
+   in let st2 = st-append-code (a1.state) (mov-load (a1.reg) (a0.reg) 0)
+   in let st3 = st-append-code st2 (li (a0.reg) deck-ceiling-addr)
+   in st-append-code st3 (mov-store (a0.reg) (a1.reg) 0)
+
+  emit-deck-disarm : CodegenState -> CodegenState
+  emit-deck-disarm (st) =
+   if deck-guard-enabled == 0 then st
+   else let d0 = alloc-temp st
+   in let st1 = st-append-code (d0.state) (li (d0.reg) deck-ceiling-addr)
+   in let d1 = alloc-temp st1
+   in let st2 = st-append-code (d1.state) (li (d1.reg) 0)
+   in st-append-code st2 (mov-store (d0.reg) (d1.reg) 0)
+
   emit-deck-enter-builtin : CodegenState -> EmitResult
   emit-deck-enter-builtin (st) =
    let t0 = alloc-temp st
@@ -15409,7 +15479,8 @@ Section: Builtin Emission
    in let t4 = alloc-temp st9
    in let st10 = st-append-code (t4.state) (li (t4.reg) deck-pos-addr)
    in let st11 = st-append-code st10 (mov-load reg-r10 (t4.reg) 0)
-   in let st12 = patch-jcc-at st11 jcc-pos (st11.code-len)
+   in let st-armed = emit-deck-arm st11
+   in let st12 = patch-jcc-at st-armed jcc-pos (st-armed.code-len)
    in let rd = alloc-temp st12
    in EmitResult {
    state = st-append-code (rd.state) (li (rd.reg) 0),
@@ -15432,7 +15503,8 @@ Section: Builtin Emission
    in let e3 = alloc-temp st7
    in let st8 = st-append-code (e3.state) (li (e3.reg) bivy-save-addr)
    in let st9 = st-append-code st8 (mov-load reg-r10 (e3.reg) 0)
-   in let st10 = patch-jcc-at st9 jcc-pos (st9.code-len)
+   in let st-disarmed = emit-deck-disarm st9
+   in let st10 = patch-jcc-at st-disarmed jcc-pos (st-disarmed.code-len)
    in let rd = alloc-temp st10
    in EmitResult {
    state = st-append-code (rd.state) (li (rd.reg) 0),
@@ -15448,7 +15520,7 @@ Section: Builtin Emission
   emit-list-with-capacity-builtin-bivy (st) (cap-reg) =
    let rd = alloc-temp-avoiding st cap-reg
    in let st1 = st-append-code (rd.state) (mov-store reg-r10 cap-reg 0)
-   in let st2 = st-append-code st1 (add-ri reg-r10 8)
+   in let st2 = heap-bump-imm st1 8
    in let st3 = st-append-code st2 (mov-rr (rd.reg) reg-r10)
    in let zero-tmp = alloc-temp-avoiding st3 cap-reg
    in let st4 = st-append-code (zero-tmp.state) (li (zero-tmp.reg) 0)
@@ -15458,7 +15530,7 @@ Section: Builtin Emission
    in let st7 = st-append-code st6 (shl-ri (adv-tmp.reg) 3)
    in let st8 = st-append-code st7 (add-ri (adv-tmp.reg) 8)
    in EmitResult {
-   state = st-append-code st8 (add-rr reg-r10 (adv-tmp.reg)),
+   state = heap-bump-reg st8 (adv-tmp.reg),
    reg = rd.reg
   }
 
@@ -16572,7 +16644,7 @@ Section: Bare-Metal Start
    in if eoa < 0 then st
    else let st1 = emit-load-func-addr st reg-rcx stub-name
    in let st2 = st-append-code st1 (mov-rr reg-rax reg-r10)
-   in let st3 = st-append-code st2 (add-ri reg-r10 16)
+   in let st3 = heap-bump-imm st2 16
    in let st4 = st-append-code st3 (mov-store reg-rax reg-rcx 0)
    in let st5 = st-append-code st4 (li reg-r11 eoa)
    in st-append-code st5 (mov-store reg-r11 reg-rax 0)
@@ -19650,7 +19722,7 @@ Section: List Emission
    let cap-tmp = alloc-temp st
    in let st1 = st-append-code (cap-tmp.state) (li (cap-tmp.reg) count)
    in let st2 = st-append-code st1 (mov-store reg-r10 (cap-tmp.reg) 0)
-   in let st3 = st-append-code st2 (add-ri reg-r10 8)
+   in let st3 = heap-bump-imm st2 8
    in let alloc = emit-bivy-alloc st3 ((count + 1) * 8)
    in let len-tmp = alloc-temp (alloc.state)
    in let st7 = st-append-code (len-tmp.state) (li (len-tmp.reg) count)
@@ -19664,6 +19736,67 @@ Page 5 of 14
 
 
 Chapter: Parsmi--X86-64 Code Generator
+
+Section: Heap Bump
+
+ The guard is 31 bytes and needs no scratch register, which is the constraint
+ that decides both encodings -- see `cmp-r-abs` and `cmp-abs-imm8`. It runs at
+ 59 allocation sites across 8 emitter chapters, where every register is already
+ live.
+
+ A CEILING OF ZERO MEANS UNARMED, AND THE FIRST TEST IS WHAT MAKES THE GUARD
+ SAFE OUTSIDE THE COMPILER. Without this test the second compare reads a
+ zero-initialised cell as a ceiling, every frontier exceeds it, and the trap
+ fires on the FIRST heap allocation of every emitted program: measured
+ 2026-08-27, the sign tool and a five-line probe both died `!EXC=06` at
+ `R10=0x600008` while the guarded compiler itself ran clean, because the
+ compiler is the one program that arms the cell.
+
+ A GREEN GATE IS NOT EVIDENCE THIS GUARD WORKS, AND NEITHER IS THE `-Decks`
+ KNOB. The per-site `deck-short-of` checks raise CDX9002 before the deck
+ cursor ever reaches this ceiling, so every starvation route that exists
+ reports the OLDER guard's refusal and this one stays silent: measured
+ 2026-08-28, a sweep at 50/60/70/80/90 was byte-for-byte identical between a
+ guarded and an unguarded kernel, and `deck-floor-test.ps1` passes all four
+ arms against the guarded kernel while testing that same per-site path. A new
+ guard sitting behind an older one inherits its green rather than earning it.
+ The only instrument that separates this working from dead code is a SABOTAGE
+ of the arming value, one edit and one build: `build` writing `p + 4096`
+ instead of `p + size` dies `!EXC=06` with no output where the good kernel
+ compiles the same chapter at exit 0.
+
+ THE CELL IS ARMED FOR THE LENGTH OF A DECK EXTENT AND ZERO OUTSIDE IT.
+ `__deck-enter` copies the reservation top into it on the counter's 0 to 1
+ crossing and `__deck-exit` writes zero back on the crossing to 0
+ (`emit-deck-enter-builtin` / `emit-deck-exit-builtin`, `X86_64Builtins.codex`);
+ `build` writes only the reservation top, in its own cell. That is what makes
+ R10 here a statement about the DECK CURSOR: inside an extent `__deck-enter`
+ has loaded R10 from the deck-pos cell and every allocation walks it up the
+ deck, while outside one R10 is the bivy frontier, which sits above the
+ reservation by construction and would trip a ceiling that stayed armed. The
+ argument is written once, where the top is written, in
+ `Core/PhaseAllocator.codex`.
+
+ The two rel32 displacements are the lengths of what each branch skips: 16 is
+ the armed compare, its branch and the UD2, and 2 is the UD2 alone.
+
+  deck-guard-code : List Integer
+  deck-guard-code =
+   cmp-abs-imm8 deck-ceiling-addr 0
+     & jcc cc-e 16
+     & cmp-r-abs reg-r10 deck-ceiling-addr
+     & jcc cc-be 2
+     & [15, 11]
+
+  heap-bump-imm : CodegenState, Integer -> CodegenState
+  heap-bump-imm (st) (n) =
+   if deck-guard-enabled == 0 then st-append-code st (add-ri reg-r10 n)
+   else st-append-code st (add-ri reg-r10 n & deck-guard-code)
+
+  heap-bump-reg : CodegenState, Integer -> CodegenState
+  heap-bump-reg (st) (r) =
+   if deck-guard-enabled == 0 then st-append-code st (add-rr reg-r10 r)
+   else st-append-code st (add-rr reg-r10 r & deck-guard-code)
 
 Section: State Records
 
@@ -20490,7 +20623,7 @@ Section: I/O Boundary Helpers
 
    in let st-none-d = st-append-code st-none-c (mov-store reg-rax reg-rdi 0)
 
-   in let st-none-e = st-append-code st-none-d (add-ri reg-r10 8)
+   in let st-none-e = heap-bump-imm st-none-d 8
 
    in let st-none-f = st-append-code st-none-e (pop-r reg-r12)
 
@@ -20586,7 +20719,7 @@ Section: I/O Boundary Helpers
 
    in let st56 = st-append-code st55 (and-ri reg-rax (-8))
 
-   in let st57 = st-append-code st56 (add-rr reg-r10 reg-rax)
+   in let st57 = heap-bump-reg st56 reg-rax
 
    in let st-just-a = st-append-code st57 (mov-rr reg-rax reg-r10)
 
@@ -20596,7 +20729,7 @@ Section: I/O Boundary Helpers
 
    in let st-just-d = st-append-code st-just-c (mov-store reg-rax reg-rbx 8)
 
-   in let st-just-e = st-append-code st-just-d (add-ri reg-r10 16)
+   in let st-just-e = heap-bump-imm st-just-d 16
 
    in let st59 = st-append-code st-just-e (pop-r reg-r12)
 
@@ -20706,7 +20839,7 @@ Section: I/O Boundary Helpers
 
    in let st-none-d = st-append-code st-none-c (mov-store reg-rax reg-rdi 0)
 
-   in let st-none-e = st-append-code st-none-d (add-ri reg-r10 8)
+   in let st-none-e = heap-bump-imm st-none-d 8
 
    in let st-none-f = st-append-code st-none-e (pop-r reg-rbx)
 
@@ -20778,7 +20911,7 @@ Section: I/O Boundary Helpers
 
    in let st56 = st-append-code st55 (and-ri reg-rax (-8))
 
-   in let st57 = st-append-code st56 (add-rr reg-r10 reg-rax)
+   in let st57 = heap-bump-reg st56 reg-rax
 
    in let st-just-a = st-append-code st57 (mov-rr reg-rax reg-r10)
 
@@ -20788,7 +20921,7 @@ Section: I/O Boundary Helpers
 
    in let st-just-d = st-append-code st-just-c (mov-store reg-rax reg-rbx 8)
 
-   in let st-just-e = st-append-code st-just-d (add-ri reg-r10 16)
+   in let st-just-e = heap-bump-imm st-just-d 16
 
    in let st59 = st-append-code st-just-e (pop-r reg-rbx)
 
@@ -20928,7 +21061,7 @@ Section: I/O Boundary Helpers
 
    in let st44 = st-append-code st43 (add-ri reg-rax 8)
 
-   in let st45 = st-append-code st44 (add-rr reg-r10 reg-rax)
+   in let st45 = heap-bump-reg st44 reg-rax
 
    in let st46 = st-append-code st45 (mov-rr reg-rax reg-rbx)
 
@@ -20993,7 +21126,7 @@ Section: I/O Boundary Helpers
    in let st39 = st-append-code st38 (add-ri reg-rax 15)
    in let st40 = st-append-code st39 (and-ri reg-rax (-8))
    in let st41 = st-append-code st40 (add-ri reg-rax 8)
-   in let st42 = st-append-code st41 (add-rr reg-r10 reg-rax)
+   in let st42 = heap-bump-reg st41 reg-rax
    in let st43 = st-append-code st42 (mov-rr reg-rax reg-rbx)
    in let st44 = st-append-code st43 (pop-r reg-rcx)
    in let st45 = st-append-code st44 (pop-r reg-rbx)
@@ -21047,7 +21180,7 @@ Section: I/O Boundary Helpers
    in let st39 = st-append-code st38 (add-ri reg-rax 15)
    in let st40 = st-append-code st39 (and-ri reg-rax (-8))
    in let st41 = st-append-code st40 (add-ri reg-rax 8)
-   in let st42 = st-append-code st41 (add-rr reg-r10 reg-rax)
+   in let st42 = heap-bump-reg st41 reg-rax
    in let st43 = st-append-code st42 (mov-rr reg-rax reg-rbx)
    in let st44 = st-append-code st43 (pop-r reg-rcx)
    in let st45 = st-append-code st44 (pop-r reg-rbx)
@@ -21792,7 +21925,7 @@ Section: I/O Boundary Helpers
    in let st98 = st-append-code st97 (mov-rr reg-rax reg-r10)
    in let st99 = st-append-code st98 (li reg-r11 0)
    in let st100 = st-append-code st99 (mov-store reg-rax reg-r11 0)
-   in let st101 = st-append-code st100 (add-ri reg-r10 8)
+   in let st101 = heap-bump-imm st100 8
    in let st102 = patch-jmp-at st101 jmp-end (st101.code-len)
    in let st103 = st-append-code st102 [72, 129, 196, 0, 2, 0, 0]
    in let st104 = st-append-code st103 (pop-r reg-r15 & pop-r reg-r14 & pop-r reg-r13 & pop-r reg-r12 & pop-r reg-rbx & pop-r reg-rbp)
@@ -22302,7 +22435,8 @@ Section: Allocator Helpers
 
    let st1 = record-func-offset st "__alloc"
 
-   in let st2 = st-append-code st1 (mov-rr reg-rax reg-r10 & add-rr reg-r10 reg-rdi)
+   in let st1b = st-append-code st1 (mov-rr reg-rax reg-r10)
+   in let st2 = heap-bump-reg st1b reg-rdi
    in let st-tr = if st.trace-alloc then emit-alloc-trace st2 else st2
    in let st3 = st-append-code st-tr (push-r reg-rcx & push-r reg-rax)
    in let st4 = st-append-code st3 (mov-rr reg-rcx reg-rdi & mov-rr reg-rdi reg-rax)
@@ -22545,7 +22679,7 @@ Section: Buffer Helpers
 
    in let st6 = st-append-code st5 (mov-store reg-r10 reg-r13 0)
 
-   in let st7 = st-append-code st6 (add-ri reg-r10 8)
+   in let st7 = heap-bump-imm st6 8
 
    in let st8 = st-append-code st7 (mov-rr reg-rbx reg-r10)
 
@@ -22557,7 +22691,7 @@ Section: Buffer Helpers
 
    in let st12 = st-append-code st11 (shl-ri reg-rax 3)
 
-   in let st13 = st-append-code st12 (add-rr reg-r10 reg-rax)
+   in let st13 = heap-bump-reg st12 reg-rax
 
    in let st14 = st-append-code st13 (li reg-rcx 0)
 
@@ -22922,7 +23056,7 @@ Section: Binary Output
 
    in let st15a = st-append-code st15 (mov-store reg-r10 reg-r12 0)
 
-   in let st15b = st-append-code st15a (add-ri reg-r10 8)
+   in let st15b = heap-bump-imm st15a 8
 
    in let st16 = st-append-code st15b (mov-rr reg-r13 reg-r10)
 
@@ -22934,7 +23068,7 @@ Section: Binary Output
 
    in let st20 = st-append-code st19 (shl-ri reg-rax 3)
 
-   in let st21 = st-append-code st20 (add-rr reg-r10 reg-rax)
+   in let st21 = heap-bump-reg st20 reg-rax
 
    in let st22 = st-append-code st21 (mov-rr reg-rcx reg-rbx)
 
@@ -22998,7 +23132,7 @@ Section: Binary Output
 
    in let st3 = st-append-code st2 (mov-rr reg-rsi reg-r10)
 
-   in let st4 = st-append-code st3 (add-ri reg-r10 512)
+   in let st4 = heap-bump-imm st3 512
 
    in let st5 = st-append-code st4 (mov-rr reg-rdi reg-rbx)
 
@@ -23058,7 +23192,7 @@ Section: Binary Output
 
    in let st3 = st-append-code st2 (mov-rr reg-r12 reg-r10)
 
-   in let st4 = st-append-code st3 (add-ri reg-r10 512)
+   in let st4 = heap-bump-imm st3 512
 
    in let st5 = st-append-code st4 (mov-rr reg-rdi reg-rbx)
 
@@ -23094,7 +23228,7 @@ Section: Binary Output
 
    in let st4 = st-append-code st3 (mov-rr reg-r14 reg-r10)
 
-   in let st5 = st-append-code st4 (add-ri reg-r10 512)
+   in let st5 = heap-bump-imm st4 512
 
    in let st6 = st-append-code st5 (mov-rr reg-r15 reg-r10)
 
@@ -24203,7 +24337,7 @@ Section: Binary Output
 
    in let st1 = st-append-code st0 (mov-rr reg-rax reg-r10)
 
-   in let st2 = st-append-code st1 (add-rr reg-r10 reg-rdi)
+   in let st2 = heap-bump-reg st1 reg-rdi
 
    in st-append-code st2 x86-ret
 
@@ -27357,7 +27491,7 @@ Section: IPC and Network Helpers
    in let st15 = st-append-code st14 (add-ri reg-rax 15)
    in let st16 = st-append-code st15 (and-ri reg-rax (-8))
    in let st17 = st-append-code st16 (add-ri reg-rax 8)
-   in let st18 = st-append-code st17 (add-rr reg-r10 reg-rax)
+   in let st18 = heap-bump-reg st17 reg-rax
    in let st19 = st-append-code st18 (mov-rr reg-rax reg-rbx)
    in let st20 = st-append-code st19 (pop-r reg-rcx)
    in let st21 = st-append-code st20 (pop-r reg-rbx)
@@ -28754,11 +28888,11 @@ Section: __list_tail
    in let st9 = st-append-code st8 (li reg-rax 0)
    in let st10 = st-append-code st9 (sub-ri reg-rax 1)
    in let st11 = st-append-code st10 (mov-store reg-r10 reg-rax 0)
-   in let st12 = st-append-code st11 (add-ri reg-r10 8)
+   in let st12 = heap-bump-imm st11 8
    in let st13 = st-append-code st12 (mov-rr reg-rax reg-r10)
    in let st14 = st-append-code st13 (mov-store reg-rax reg-rcx 0)
    in let st15 = st-append-code st14 (mov-store reg-rax reg-rdi 8)
-   in let st16 = st-append-code st15 (add-ri reg-r10 16)
+   in let st16 = heap-bump-imm st15 16
    in st-append-code st16 x86-ret
 
 Section: __list_cons
@@ -28777,11 +28911,11 @@ Section: __list_cons
    in let st8 = st-append-code st7 (li reg-r11 4)
    in let st9 = patch-jcc-at st8 cap-ok-pos (st8.code-len)
    in let st10 = st-append-code st9 (mov-store reg-r10 reg-r11 0)
-   in let st11 = st-append-code st10 (add-ri reg-r10 8)
+   in let st11 = heap-bump-imm st10 8
    in let st12 = st-append-code st11 (mov-rr reg-rax reg-r10)
    in let st13 = st-append-code st12 (add-ri reg-r11 1)
    in let st14 = st-append-code st13 (shl-ri reg-r11 3)
-   in let st15 = st-append-code st14 (add-rr reg-r10 reg-r11)
+   in let st15 = heap-bump-reg st14 reg-r11
    in let st16 = st-append-code st15 (mov-store reg-rax reg-rdx 0)
    in st-append-code st16 (mov-store reg-rax reg-rdi 8)
 
@@ -28868,12 +29002,12 @@ Section: __list_append
    in let st14 = st-append-code st13 (li reg-rax 4)
    in let st15 = patch-jcc-at st14 cap-ok-pos (st14.code-len)
    in let st16 = st-append-code st15 (mov-store reg-r10 reg-rax 0)
-   in let st17 = st-append-code st16 (add-ri reg-r10 8)
+   in let st17 = heap-bump-imm st16 8
    in let st18 = st-append-code st17 (mov-rr reg-rsi reg-r10)
    in let st19 = st-append-code st18 (mov-rr reg-r11 reg-rax)
    in let st20 = st-append-code st19 (add-ri reg-r11 1)
    in let st21 = st-append-code st20 (shl-ri reg-r11 3)
-   in let st22 = st-append-code st21 (add-rr reg-r10 reg-r11)
+   in let st22 = heap-bump-reg st21 reg-r11
    in st-append-code st22 (mov-store reg-rsi reg-r13 0)
 
   emit-list-append-path2-copy-a : CodegenState -> CodegenState
@@ -28991,7 +29125,7 @@ Section: __list_snoc
    in let h7 = st-append-code h6 (mov-store reg-rdi reg-rax (-8))
    in let h8 = st-append-code h7 (sub-rr reg-rax reg-rdx)
    in let h9 = st-append-code h8 (shl-ri reg-rax 3)
-   in let h10 = st-append-code h9 (add-rr reg-r10 reg-rax)
+   in let h10 = heap-bump-reg h9 reg-rax
    in let h11 = st-append-code h10 (mov-rr reg-rax reg-rcx)
    in let h12 = st-append-code h11 (shl-ri reg-rax 3)
    in let h13 = patch-jmp-at h12 to-store-pos (h12.code-len)
@@ -29025,12 +29159,12 @@ Section: __list_snoc
    in let st10 = st-append-code st9 (li reg-r13 4)
    in let st11 = patch-jcc-at st10 cap-ok2-pos (st10.code-len)
    in let st12 = st-append-code st11 (mov-store reg-r10 reg-r13 0)
-   in let st13 = st-append-code st12 (add-ri reg-r10 8)
+   in let st13 = heap-bump-imm st12 8
    in let st14 = st-append-code st13 (mov-rr reg-rax reg-r10)
    in let st15 = st-append-code st14 (mov-rr reg-rdx reg-r13)
    in let st16 = st-append-code st15 (add-ri reg-rdx 1)
    in let st17 = st-append-code st16 (shl-ri reg-rdx 3)
-   in st-append-code st17 (add-rr reg-r10 reg-rdx)
+   in heap-bump-reg st17 reg-rdx
 
   emit-list-push-path3-copy : CodegenState -> CodegenState
   emit-list-push-path3-copy (st) =
@@ -29351,7 +29485,7 @@ Section: __list_insert_at
    in let st6 = st-append-code st5 (mov-store reg-rbx reg-rax (-8))
    in let st7 = st-append-code st6 (sub-rr reg-rax reg-rcx)
    in let st8 = st-append-code st7 (shl-ri reg-rax 3)
-   in st-append-code st8 (add-rr reg-r10 reg-rax)
+   in heap-bump-reg st8 reg-rax
 
   emit-list-insert-at-shift : CodegenState, Integer -> CodegenState
   emit-list-insert-at-shift (st) (in-place-pos) =
@@ -29398,12 +29532,12 @@ Section: __list_insert_at
    in let st5 = st-append-code st4 (li reg-rcx 4)
    in let st6 = patch-jcc-at st5 cap-ok-pos (st5.code-len)
    in let st7 = st-append-code st6 (mov-store reg-r10 reg-rcx 0)
-   in let st8 = st-append-code st7 (add-ri reg-r10 8)
+   in let st8 = heap-bump-imm st7 8
    in let st9 = st-append-code st8 (mov-rr reg-rax reg-r10)
    in let st10 = st-append-code st9 (mov-rr reg-rdx reg-rcx)
    in let st11 = st-append-code st10 (add-ri reg-rdx 1)
    in let st12 = st-append-code st11 (shl-ri reg-rdx 3)
-   in let st13 = st-append-code st12 (add-rr reg-r10 reg-rdx)
+   in let st13 = heap-bump-reg st12 reg-rdx
    in let st14 = st-append-code st13 (mov-rr reg-rdx reg-r14)
    in let st15 = st-append-code st14 (add-ri reg-rdx 1)
    in st-append-code st15 (mov-store reg-rax reg-rdx 0)
@@ -29527,13 +29661,13 @@ Section: List Concat Many
    in let st18 = patch-jcc-at st17 sum-back sum-top
    in let st19 = patch-jcc-at st18 skip-sum (st18.code-len)
    in let st20 = st-append-code st19 (mov-store reg-r10 reg-r14 0)
-   in let st21 = st-append-code st20 (add-ri reg-r10 8)
+   in let st21 = heap-bump-imm st20 8
    in let st22 = st-append-code st21 (mov-rr reg-rbx reg-r10)
    in let st23 = st-append-code st22 (mov-store reg-r10 reg-r14 0)
    in let st24 = st-append-code st23 (mov-rr reg-rax reg-r14)
    in let st25 = st-append-code st24 (add-ri reg-rax 1)
    in let st26 = st-append-code st25 (shl-ri reg-rax 3)
-   in let st27 = st-append-code st26 (add-rr reg-r10 reg-rax)
+   in let st27 = heap-bump-reg st26 reg-rax
    in let st28 = st-append-code st27 (li reg-r15 0)
    in let st29 = st-append-code st28 (li reg-rcx 0)
    in let st30 = st-append-code st29 (cmp-rr reg-rcx reg-r13)
@@ -30363,7 +30497,7 @@ Section: __itoa
    in let st3 = st-append-code st2 (mov-rr reg-rsi reg-rdx)
    in let st4 = st-append-code st3 (add-ri reg-rsi 15)
    in let st5 = st-append-code st4 (and-ri reg-rsi (-8))
-   in let st6 = st-append-code st5 (add-rr reg-r10 reg-rsi)
+   in let st6 = heap-bump-reg st5 reg-rsi
    in let st7 = st-append-code st6 (mov-store reg-rax reg-rdx 0)
    in let st8 = st-append-code st7 (li reg-r11 0)
    in let st9 = st-append-code st8 (test-rr reg-r12 reg-r12)
@@ -30458,7 +30592,7 @@ Section: __str_concat
    in let st1 = st-append-code st0 (add-ri reg-r11 15)
    in let st2 = st-append-code st1 (and-ri reg-r11 (-8))
    in let st3 = st-append-code st2 (lea reg-r10 reg-rbx 0)
-   in let st4 = st-append-code st3 (add-rr reg-r10 reg-r11)
+   in let st4 = heap-bump-reg st3 reg-r11
    in let st5 = st-append-code st4 (mov-rr reg-rax reg-rbx)
    in let fast-done-pos = st5.code-len
    in let st6 = st-append-code st5 (jmp 0)
@@ -30475,7 +30609,7 @@ Section: __str_concat
    in let st4 = st-append-code st3 (mov-rr reg-r11 reg-r13)
    in let st5 = st-append-code st4 (add-ri reg-r11 15)
    in let st6 = st-append-code st5 (and-ri reg-r11 (-8))
-   in let st7 = st-append-code st6 (add-rr reg-r10 reg-r11)
+   in let st7 = heap-bump-reg st6 reg-r11
    in st-append-code st7 (mov-store reg-rax reg-r13 0)
 
   emit-str-concat-slow-copy1 : CodegenState -> CodegenState
@@ -30556,7 +30690,7 @@ Section: __str_own
    in let st5 = st-append-code st4 (cmp-rr reg-rcx reg-r10)
    in let skip-pos = st5.code-len
    in let st6 = st-append-code st5 (jcc cc-ne 0)
-   in let st7 = st-append-code st6 (add-ri reg-r10 16)
+   in let st7 = heap-bump-imm st6 16
    in let st8 = patch-jcc-at st7 skip-pos (st7.code-len)
    in st-append-code st8 x86-ret
 
@@ -30955,7 +31089,7 @@ Section: __real_to_text
    in let st5 = st-append-code st4 (mov-rr reg-rsi reg-rcx)
    in let st6 = st-append-code st5 (add-ri reg-rsi 15)
    in let st7 = st-append-code st6 (and-ri reg-rsi (-8))
-   in let st8 = st-append-code st7 (add-rr reg-r10 reg-rsi)
+   in let st8 = heap-bump-reg st7 reg-rsi
    in st-append-code st8 (mov-store reg-rax reg-rcx 0)
 
   emit-number-to-text-copy : CodegenState -> HelpResult1
@@ -31022,7 +31156,7 @@ Section: __real_to_text
    in let st3 = st-append-code st2 (mov-rr reg-rsi reg-rcx)
    in let st4 = st-append-code st3 (add-ri reg-rsi 15)
    in let st5 = st-append-code st4 (and-ri reg-rsi (-8))
-   in let st6 = st-append-code st5 (add-rr reg-r10 reg-rsi)
+   in let st6 = heap-bump-reg st5 reg-rsi
    in let st7 = st-append-code st6 (mov-store reg-rax reg-rcx 0)
    in let st8 = st-append-code st7 (li reg-r11 0)
    in let st9 = st-append-code st8 (test-rr reg-r12 reg-r12)
@@ -31296,7 +31430,7 @@ Section: __text_concat_list
    in let st2 = st-append-code st1 (mov-rr reg-rax reg-r13)
    in let st3 = st-append-code st2 (add-ri reg-rax 15)
    in let st4 = st-append-code st3 (and-ri reg-rax (-8))
-   in st-append-code st4 (add-rr reg-r10 reg-rax)
+   in heap-bump-reg st4 reg-rax
 
   emit-text-concat-list-copy-outer : CodegenState -> HelpResult2
   emit-text-concat-list-copy-outer (st) =
@@ -31463,7 +31597,7 @@ Section: __str_replace
    in let st3 = st-append-code st2 (add-ri reg-rax 15)
    in let st4 = st-append-code st3 (and-ri reg-rax (-8))
    in let st5 = st-append-code st4 (lea reg-r10 reg-r14 0)
-   in let st6 = st-append-code st5 (add-rr reg-r10 reg-rax)
+   in let st6 = heap-bump-reg st5 reg-rax
    in let st7 = st-append-code st6 (mov-rr reg-rax reg-r14)
    in let st8 = st-append-code st7 (pop-r reg-r15)
    in let st9 = st-append-code st8 (pop-r reg-r14)
@@ -31510,12 +31644,12 @@ Section: __text_split
    in let st8a = st-append-code st8 (mov-rr reg-rax reg-r12)
    in let st8b = st-append-code st8a (add-ri reg-rax 1)
    in let st8c = st-append-code st8b (mov-store reg-r10 reg-rax 0)
-   in let st8d = st-append-code st8c (add-ri reg-r10 8)
+   in let st8d = heap-bump-imm st8c 8
    in let st9 = st-append-code st8d (mov-rr reg-r14 reg-r10)
    in let st10 = st-append-code st9 (mov-rr reg-rax reg-r12)
    in let st11 = st-append-code st10 (add-ri reg-rax 2)
    in let st12 = st-append-code st11 (shl-ri reg-rax 3)
-   in let st13 = st-append-code st12 (add-rr reg-r10 reg-rax)
+   in let st13 = heap-bump-reg st12 reg-rax
    in let st14 = st-append-code st13 (li reg-r15 0)
    in let st15 = st-append-code st14 (li reg-r11 0)
    in st-append-code st15 (mov-rr reg-rcx reg-r11)
@@ -31577,7 +31711,7 @@ Section: __text_split
    in let st4 = st-append-code st3 (push-r reg-rax)
    in let st5 = st-append-code st4 (add-ri reg-rax 15)
    in let st6 = st-append-code st5 (and-ri reg-rax (-8))
-   in let st7 = st-append-code st6 (add-rr reg-r10 reg-rax)
+   in let st7 = heap-bump-reg st6 reg-rax
    in let st8 = st-append-code st7 (pop-r reg-rax)
    in let st9 = st-append-code st8 (push-r reg-r11)
    in st-append-code st9 (li reg-rsi 0)
@@ -31625,7 +31759,7 @@ Section: __text_split
    in let st5 = st-append-code st4 (push-r reg-rax)
    in let st6 = st-append-code st5 (add-ri reg-rax 15)
    in let st7 = st-append-code st6 (and-ri reg-rax (-8))
-   in let st8 = st-append-code st7 (add-rr reg-r10 reg-rax)
+   in let st8 = heap-bump-reg st7 reg-rax
    in st-append-code st8 (pop-r reg-rax)
 
   emit-text-split-final-copy : CodegenState -> CodegenState
@@ -31688,6 +31822,16 @@ Section: Emit Buffers
   code-buffer-size : Integer = 8388608
   data-buffer-size : Integer = 2097152
   accum-capacity : Integer = 65536
+
+Section: Deck Guard
+
+ COMPILER-27, Damian's ruling 2026-08-27: the guard goes in behind a
+ compile-time flag, and the toggle is a single operation. 0 selects the
+ unguarded bump, anything else selects the guarded one. It is read by
+ heap-bump-imm and heap-bump-reg at EMIT time, so the emitted program carries
+ no test of this flag; it carries either the guard or nothing.
+
+  deck-guard-enabled : Integer = 1
 
 Section: Work Budgets
   max-emit-work : Integer = 16777216
@@ -31973,13 +32117,53 @@ Section: Primitives
 
   guard-page-plausible-floor : Integer = 1073741824
 
+  deck-reservation-top-cell : Integer = 36344
+
   build : Integer -> Integer
   build (size) =
    let p = __heap-save
    in let deck-init = __deck-set p
    in let guarded = deck-reservation-guard p size
+   in let top = if deck-guard-enabled == 0 then 0 else poke-qword-cell deck-reservation-top-cell (p + size)
    in let advanced = __heap-advance size
    in p
+
+ The reservation's top, written here because this is where it is known, and
+ NOT the value the per-allocation guard compares against. Those were the same
+ cell until 2026-08-28 and that is the whole of what the re-point changes.
+
+ R10 IS THE DECK CURSOR, BUT ONLY INSIDE AN EXTENT. `__deck-enter` copies the
+ deck-pos cell into R10 and `__deck-exit` writes it back, on the zero crossings
+ of the nesting counter (`emit-deck-enter-builtin` / `emit-deck-exit-builtin`,
+ `Emit/X86_64Builtins.codex`), so within an extent every allocation moves R10
+ down the deck and R10 against this top is exactly the question the row asks.
+ Outside an extent R10 is the bivy frontier, which lives ABOVE the reservation
+ and is SUPPOSED to: `build` advances the heap over the whole deck height, so
+ the frontier parks on this top the instant the reservation is made and every
+ ordinary allocation afterwards is legitimately past it.
+
+ Arming the ceiling here is therefore the defect measured 2026-08-27: the guard
+ fired on the first ordinary allocation after every reservation and the guarded
+ compiler could not compile itself (`!EXC=06` at R10=0x14ADAECC, 324.9 MB). The
+ ceiling is armed at `__deck-enter` and disarmed at `__deck-exit` instead, which
+ is what makes the comparison a statement about the deck cursor rather than
+ about the bivy, and it costs the 59 allocation sites nothing: they keep the
+ same two compares, and zero still means unarmed.
+
+ Byte-wise because poke-byte is the only poke primitive; build runs thirteen
+ times per compile, so eight stores apiece is not a cost worth a new builtin.
+
+  poke-qword-cell : Integer, Integer -> Integer
+  poke-qword-cell (addr) (v) =
+   let b0 = poke-byte addr 0 (int-mod v 256)
+   in let b1 = poke-byte addr 1 (int-mod (v / 256) 256)
+   in let b2 = poke-byte addr 2 (int-mod (v / 65536) 256)
+   in let b3 = poke-byte addr 3 (int-mod (v / 16777216) 256)
+   in let b4 = poke-byte addr 4 (int-mod (v / 4294967296) 256)
+   in let b5 = poke-byte addr 5 (int-mod (v / 1099511627776) 256)
+   in let b6 = poke-byte addr 6 (int-mod (v / 281474976710656) 256)
+   in let b7 = poke-byte addr 7 (int-mod (v / 72057594037927936) 256)
+   in v
 
   deck-reservation-guard : Integer, Integer -> Integer
   deck-reservation-guard (p) (size) =
@@ -50107,7 +50291,7 @@ Section: Expression Lowering
     is AHandleExpr (eff) (body) (clauses) (s) -> lower-handle eff body clauses ty ctx s
     is AWithTimeoutExpr (timeout) (effs) (scopes) (body) (s) ->
      let body-ir = lower-expr body ty ctx
-     in deck-record (IrWithTimeout (lit-text-to-integer timeout) (map-list name-value effs) scopes body-ir ty s)
+     in deck-record (IrWithTimeout (lit-text-to-integer timeout) (map-list name-value effs) scopes body-ir (chain-ret-or ty (ir-expr-type body-ir)) s)
     is ATryExpr (max) (body) (fb) (fail) (s) ->
      let body-ir = lower-act-stmts-loop body ty ctx 0 (list-length body)
      in let fb-ir = lower-act-stmts-loop fb ty ctx 0 (list-length fb)
@@ -50125,7 +50309,10 @@ Section: Expression Lowering
 
   lower-lazy : AExpr, CodexType, LowerCtx, SourceSpan, Integer -> IRExpr
   lower-lazy (inner) (ty) (ctx) (s) (depth) =
-   let inner-ty = peel-fun-return ty
+   let peeled-inner = peel-fun-return ty
+   in let inner-ty = when peeled-inner
+      is ErrorTy | NoExpectTy -> deep-resolve (ctx.ust) (lookup-expr-type (ctx.ust) (aexpr-span inner))
+      is otherwise -> peeled-inner
    in let sfx = integer-to-text depth
    in let cell-n = "__lz-cell" & sfx
    in let unit-n = "__lz-u" & sfx
@@ -50147,18 +50334,19 @@ Section: Expression Lowering
     chapter-renames = ctx.chapter-renames
    }
    in let body-ir = lower-expr-at inner inner-ty lctx (depth + 97)
+   in let val-ty = chain-ret-or inner-ty (ir-expr-type body-ir)
    in let zero = deck-record (IrIntLit 0 s)
    in let one = deck-record (IrIntLit 1 s)
    in let done-read = deck-record (IrFieldAccess cell-name "__lz-done" int-ty-default s)
    in let done-check = deck-record (IrBinary IrEq done-read zero BooleanTy s)
-   in let val-name = deck-record (IrName val-n inner-ty s)
+   in let val-name = deck-record (IrName val-n val-ty s)
    in let store-done = deck-record (IrFieldStore cell-name "__lz-done" one cty s)
    in let store-val = deck-record (IrFieldStore cell-name "__lz-val" val-name cty s)
    in let inner-let2 = deck-record (IrLet s2-n cty store-val val-name s)
    in let inner-let1 = deck-record (IrLet s1-n cty store-done inner-let2 s)
-   in let then-body = deck-record (IrLet val-n inner-ty body-ir inner-let1 s)
-   in let else-body = deck-record (IrFieldAccess cell-name "__lz-val" inner-ty s)
-   in let if-expr = deck-record (IrIf done-check then-body else-body inner-ty s)
+   in let then-body = deck-record (IrLet val-n val-ty body-ir inner-let1 s)
+   in let else-body = deck-record (IrFieldAccess cell-name "__lz-val" val-ty s)
+   in let if-expr = deck-record (IrIf done-check then-body else-body val-ty s)
    in let param = deck-record (IRParam { name = unit-n, type-val = int-ty-default, span = s })
    in let lam = deck-record (IrLambda (list-push [] param) if-expr ty s)
    in deck-record (IrLet cell-n cty cell-ir lam s)
@@ -50389,7 +50577,7 @@ Section: Expression Lowering
    in let func-ir = lower-expr f fn-ty ctx
    in let ret-ty = peel-fun-return (ir-expr-type func-ir)
    in let actual-ret = when ret-ty
-      is ErrorTy | NoExpectTy -> ty
+      is ErrorTy | NoExpectTy -> expected-or-recorded-ty ty ctx sp
       is otherwise -> ret-ty
    in lower-apply-dispatch func-ir arg-ir actual-ret sp
 
@@ -50397,9 +50585,10 @@ Section: Expression Lowering
   lower-apply-lambda-chain (lam) (args) (ty) (ctx) (sp) =
    let arg-irs = for a in args -> lower-expr a NoExpectTy ctx
    in let n = list-length arg-irs
-   in let fn-ty = build-curried-fun-ty arg-irs 0 n ty
+   in let want = expected-or-recorded-ty ty ctx sp
+   in let fn-ty = build-curried-fun-ty arg-irs 0 n want
    in let func-ir = lower-expr lam fn-ty ctx
-   in apply-chain-fold func-ir arg-irs 0 n (ir-expr-type func-ir) ty sp
+   in apply-chain-fold func-ir arg-irs 0 n (ir-expr-type func-ir) want sp
 
   build-curried-fun-ty : List IRExpr, Integer, Integer, CodexType -> CodexType
   build-curried-fun-ty (irs) (i) (n) (ret) =
@@ -50618,7 +50807,7 @@ Section: Expression Lowering
    in let arg-ir = try-unit-convert raw-arg-ir arg-ty sp
    in let resolved-ret = subst-type-vars-from-arg arg-ty (ir-expr-type arg-ir) ret-ty
    in let actual-ret = when resolved-ret
-      is ErrorTy | NoExpectTy -> ty
+      is ErrorTy | NoExpectTy -> expected-or-recorded-ty ty ctx sp
       is otherwise -> resolved-ret
    in let preferred-ret = prefer-applied-ty ty actual-ret (ctx.local-type-vars)
    in if is-unit-ctor func-ir ret-ty then lower-unit-ctor-value arg-ir ret-ty sp
@@ -50633,7 +50822,7 @@ Section: Expression Lowering
    in let arg-ir = lower-expr a arg-ty-hint ctx
    in let resolved-ret = subst-type-vars-from-arg arg-ty-hint (ir-expr-type arg-ir) ret-ty
    in let actual-ret = when resolved-ret
-      is ErrorTy | NoExpectTy -> ty
+      is ErrorTy | NoExpectTy -> expected-or-recorded-ty ty ctx sp
       is otherwise -> resolved-ret
    in let preferred-ret = prefer-applied-ty ty actual-ret (ctx.local-type-vars)
    in let arg-tn = type-name-of (deep-resolve (ctx.ust) (ir-expr-type arg-ir))
@@ -50735,7 +50924,7 @@ Section: Let and Lambda
 
   lower-lambda : List Name, AExpr, CodexType, LowerCtx, SourceSpan -> IRExpr
   lower-lambda (params) (body) (ty) (ctx) (sp) =
-   let expected = lambda-expected-ty ty ctx sp
+   let expected = expected-or-recorded-ty ty ctx sp
    in let stripped = strip-forall-ty expected
    in let lparams = lower-lambda-params params stripped 0 sp
    in let lctx = bind-lambda-to-ctx ctx params stripped 0
@@ -50752,16 +50941,18 @@ Section: Let and Lambda
  compiler's TYPE FAILURE atom, for a program the compiler reported clean.
 
  The type was never missing. The checker solved these parameters and filed
- the answer; nothing asked for it here. `lambda-expected-ty` asks -- the same
- `lookup-expr-type` / `deep-resolve` pair `lower-dict-placeholder` already
- uses twenty lines above, against the span the checker recorded under.
+ the answer; nothing asked for it here. `expected-or-recorded-ty` asks -- the
+ same `lookup-expr-type` / `deep-resolve` pair `lower-dict-placeholder`
+ already uses twenty lines above, against the span the checker recorded under.
+ It is named for what it does rather than for the lambda, because the apply
+ family reaches for the same answer when its own fallback is the sentinel.
 
  Only the no-expectation case changes. When the context DID supply a type,
  `expected` is `ty` and every line below is what it was, which is why a
  lambda at a declared parameter was already correct and stays byte-identical.
 
-  lambda-expected-ty : CodexType, LowerCtx, SourceSpan -> CodexType
-  lambda-expected-ty (ty) (ctx) (sp) =
+  expected-or-recorded-ty : CodexType, LowerCtx, SourceSpan -> CodexType
+  expected-or-recorded-ty (ty) (ctx) (sp) =
    when ty
     is ErrorTy | NoExpectTy -> deep-resolve (ctx.ust) (lookup-expr-type (ctx.ust) sp)
     is otherwise -> ty
@@ -51509,7 +51700,7 @@ Section: Collections and Act
   lower-handle : Name, AExpr, List AHandleClause, CodexType, LowerCtx, SourceSpan -> IRExpr
   lower-handle (eff) (body) (clauses) (ty) (ctx) (sp) =
    let body-ir = lower-expr body ty ctx
-   in deck-record (IrHandle (eff.value) body-ir (lower-handle-clauses clauses ty ctx) ty sp)
+   in deck-record (IrHandle (eff.value) body-ir (lower-handle-clauses clauses ty ctx) (chain-ret-or ty (ir-expr-type body-ir)) sp)
 
   lower-handle-clauses : List AHandleClause, CodexType, LowerCtx -> List IRHandleClause
   lower-handle-clauses (clauses) (ty) (ctx) =
