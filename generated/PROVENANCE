@@ -2,7 +2,7 @@ Everything beside this file is emitted by build.py. Nothing here is
 source; edit source/ and rebuild.
 
 checkout   /home/steve/showell_repos/cobblestone-realconv
-           16751b22  plugs-backlog: row 2.02, the shaken prelude and the reserved list it depends on
+           16751b22 +dirty  plugs-backlog: row 2.02, the shaken prelude and the reserved list it depends on
 seed       Codex.cdx  2933240 bytes
 zig        0.16.0
 qemu       QEMU emulator version 8.2.2 (Debian 1:8.2.2+ds-0ubuntu1.18)
@@ -11,16 +11,16 @@ guest      accel=tcg  mem=3072MB
 
 what each guest was actually handed (intake/):
 
-  ringplug-source.codex.blob          367086 bytes   mode 'CDX map'
-  codexzig-subject.codex.blob        2971864 bytes   mode 'IR-CCE decks=172'
-  codexzig.ir.blob                  10070227 bytes   mode 'RING zig'
+  ringplug-source.codex.blob          370168 bytes   mode 'CDX map'
+  codexzig-subject.codex.blob        2965561 bytes   mode 'IR-CCE decks=172'
+  codexzig.ir.blob                  10058812 bytes   mode 'RING zig'
 
 what each guest touched of its cap:
 
-  ringplug.cdx                       562 MB of 3072 MB
-  codexzig.ir                       2445 MB of 3072 MB
-  codexzig.qemu.zig.cce             1036 MB of 3072 MB
+  ringplug.cdx                       581 MB of 3072 MB
+  codexzig.ir                       2466 MB of 3072 MB
+  codexzig.qemu.zig.cce             1042 MB of 3072 MB
 
 fixed point  HOLDS
 arith.codex  MATCHES arith.expected
-built in     437s
+built in     430s

@@ -299,16 +299,22 @@ def build_exe(zig_src, out_bin):
     say(f'{out_bin.name}: {out_bin.stat().st_size} bytes')
 
 
-def self_transpile(subject, out_zig):
+def self_transpile(subject, out_zig, binary=None):
     """The binary reading its own bundle.
 
     Output lands on stderr because print-text is cx_print is
     std.debug.print -- the same wart the emitted programs all carry, which
     is why the invocation everywhere is `codexzig < in 2> out`.
+
+    `binary` defaults to the built codexzig. bootstrap_native.py passes a
+    candidate instead, so that the no-guest path runs THIS function rather
+    than a second copy of it -- a copy is how a stray -O flag once made two
+    builds that were not comparable.
     """
+    binary = binary or CODEXZIG
     out_zig.unlink(missing_ok=True)
     with open(subject, 'rb') as fin, open(out_zig, 'wb') as ferr:
-        r = subprocess.run([str(CODEXZIG)], stdin=fin, stdout=subprocess.DEVNULL,
+        r = subprocess.run([str(binary)], stdin=fin, stdout=subprocess.DEVNULL,
                            stderr=ferr)
     if not out_zig.is_file() or out_zig.stat().st_size == 0:
         die(f'codexzig emitted nothing (exit {r.returncode})')
