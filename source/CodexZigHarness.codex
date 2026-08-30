@@ -132,7 +132,11 @@ Section: Driver
     in let passed = run-ir-pipeline default-ir-pipeline ir-raw False
     in let ir0 = passed.chapter
     in let ir = lift-lambdas ir0 0
-    in let czg-bag = bag-merge-all [bag-from-list (toks.errors), doc.parse-bag, rr.bag, cr.state.bag]
+    in let czg-bset = skip-list-text-from-list builtin-names
+    in let czg-shadow-bag = bag-from-list (check-shadowed-builtins (scan.def-headers) czg-bset 0 (list-length (scan.def-headers)) [])
+    in let czg-collide-bag = bag-from-list (check-cross-chapter-collisions (scan.def-headers) colliding assignments 0 (list-length (scan.def-headers)) [])
+    in let czg-entry-bag = bag-from-list (check-entry-point-duplicate assignments)
+    in let czg-bag = bag-merge-all [bag-from-list (toks.errors), doc.parse-bag, rr.bag, cr.state.bag, czg-shadow-bag, czg-collide-bag, czg-entry-bag]
     in if bag-has-errors czg-bag then print-text (czg-halted (bag-errors czg-bag))
     else let meta = IRTextMeta {
       chapter-title = ch.chapter-title,
