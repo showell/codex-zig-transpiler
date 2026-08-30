@@ -17,10 +17,9 @@ what each guest was actually handed (intake/):
 
 what each guest touched of its cap:
 
-  ringplug.cdx                       583 MB of 3072 MB
   codexzig.ir                       2465 MB of 3072 MB
-  codexzig.qemu.zig.cce             1052 MB of 3072 MB
+  codexzig.qemu.zig.cce             1053 MB of 3072 MB
 
 fixed point  HOLDS
 arith.codex  MATCHES arith.expected
-built in     544s
+built in     446s
