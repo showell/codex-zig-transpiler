@@ -2491,6 +2491,90 @@ fn is_letter(c_: i64) bool {
     return (if (((c_) >= 97)) ((c_) <= 127) else (if (((c_) >= 13)) ((c_) <= 64) else false));
 }
 
+fn cce_to_unicode_table() *CxList(i64) {
+    @setEvalBranchQuota(1000000);
+    return cx_ll_of(i64, &[_]i64{ 0, 10, 32, 48, 49, 50, 51, 52, 53, 54, 55, 56, 57, 101, 116, 97, 111, 105, 110, 115, 104, 114, 100, 108, 99, 117, 109, 119, 102, 103, 121, 112, 98, 118, 107, 106, 120, 113, 122, 69, 84, 65, 79, 73, 78, 83, 72, 82, 68, 76, 67, 85, 77, 87, 70, 71, 89, 80, 66, 86, 75, 74, 88, 81, 90, 46, 44, 33, 63, 58, 59, 39, 34, 45, 40, 41, 43, 61, 42, 60, 62, 47, 64, 35, 38, 95, 92, 124, 91, 93, 123, 125, 126, 96, 94, 36, 37, 233, 232, 234, 235, 225, 224, 226, 228, 243, 244, 246, 250, 252, 241, 231, 237, 1072, 1086, 1077, 1080, 1085, 1090, 1089, 1088, 1074, 1083, 1082, 1084, 1076, 1087, 1091 });
+}
+
+fn cce_decode_length(b_: i64) i64 {
+    return @as(i64, (if (((b_ & 128) == 0)) 1 else @as(i64, (if (((b_ & 224) == 192)) 2 else @as(i64, (if (((b_ & 240) == 224)) 3 else @as(i64, (if (((b_ & 248) == 240)) 4 else 1))))))));
+}
+
+fn cce_decode_at(s_: []const u8, offset: i64) i64 {
+    return b0: { const b0_: i64 = (cx_char_at(s_, offset)); break :b0 (if (((b0_ & 128) == 0)) b0_ else (if (((b0_ & 224) == 192)) b3: { const b1: i64 = (cx_char_at(s_, (offset +% 1))); break :b3 ((128 +% cx_shl((b0_ & 31), 6)) +% (b1 & 63)); } else (if (((b0_ & 240) == 224)) b4: { const b1: i64 = (cx_char_at(s_, (offset +% 1))); break :b4 b5: { const b2: i64 = (cx_char_at(s_, (offset +% 2))); break :b5 (((2176 +% cx_shl((b0_ & 15), 12)) +% cx_shl((b1 & 63), 6)) +% (b2 & 63)); }; } else b4: { const b1: i64 = (cx_char_at(s_, (offset +% 1))); break :b4 b5: { const b2: i64 = (cx_char_at(s_, (offset +% 2))); break :b5 b6: { const b3: i64 = (cx_char_at(s_, (offset +% 3))); break :b6 ((((67712 +% cx_shl((b0_ & 7), 18)) +% cx_shl((b1 & 63), 12)) +% cx_shl((b2 & 63), 6)) +% (b3 & 63)); }; }; }))); };
+}
+
+fn cce_tier1_block_bases() *CxList(i64) {
+    return cx_ll_of(i64, &[_]i64{ 128, 256, 1024, 128, 880, 128, 1536, 128, 1424, 128, 2304, 128, 3584, 128, 4352, 128, 19968, 512, 12352, 256, 8704, 128 });
+}
+
+fn cce_tier1_block_unicode_base(block: i64) i64 {
+    return cx_list_at(cce_tier1_block_bases(), (block *% 2));
+}
+
+fn cce_tier1_block(cp_: i64) i64 {
+    return b0: { const v_: i64 = (cp_ -% 128); break :b0 @as(i64, (if ((v_ < 256)) 0 else @as(i64, (if ((v_ < 384)) 1 else @as(i64, (if ((v_ < 512)) 2 else @as(i64, (if ((v_ < 640)) 3 else @as(i64, (if ((v_ < 768)) 4 else @as(i64, (if ((v_ < 896)) 5 else @as(i64, (if ((v_ < 1024)) 6 else @as(i64, (if ((v_ < 1152)) 7 else @as(i64, (if ((v_ < 1664)) 8 else @as(i64, (if ((v_ < 1920)) 9 else @as(i64, (if ((v_ < 2048)) 10 else -1)))))))))))))))))))))); };
+}
+
+fn cce_tier1_offset_in_block(cp_: i64) i64 {
+    return b0: { const v_: i64 = (cp_ -% 128); break :b0 (if ((v_ < 256)) v_ else (if ((v_ < 1152)) int_mod((v_ -% 256), 128) else (if ((v_ < 1664)) (v_ -% 1152) else (if ((v_ < 1920)) (v_ -% 1664) else (v_ -% 1920))))); };
+}
+
+fn cce_tier2_base() i64 {
+    return 2176;
+}
+
+fn cce_tier2_block_count() i64 {
+    return 10;
+}
+
+fn cce_tier2_block_table() *CxList(i64) {
+    return cx_ll_of(i64, &[_]i64{ 12288, 64, 12352, 96, 12448, 96, 19968, 20992, 13312, 6592, 44032, 11172, 3584, 256, 8192, 512, 127744, 1024, 9728, 256 });
+}
+
+fn cce_tier2_block_unicode_base(block: i64) i64 {
+    return cx_list_at(cce_tier2_block_table(), (block *% 2));
+}
+
+fn cce_tier2_block_size(block: i64) i64 {
+    return cx_list_at(cce_tier2_block_table(), ((block *% 2) +% 1));
+}
+
+fn cce_tier2_cce_base(block: i64) i64 {
+    return cce_tier2_cce_base_loop(block, 0, cce_tier2_base());
+}
+
+fn cce_tier2_cce_base_loop(target: i64, i_: i64, acc_: i64) i64 {
+    var _tl_i = i_;
+    var _tl_acc = acc_;
+    while (true) {
+        if ((_tl_i >= target)) { return _tl_acc; } else { { const _tj1_1 = (_tl_i +% 1); const _tj1_2 = (_tl_acc +% cce_tier2_block_size(_tl_i)); _tl_i = _tj1_1; _tl_acc = _tj1_2; continue; } }
+    }
+}
+
+fn to_unicode(cp_: i64) i64 {
+    return to_unicode_with(cce_to_unicode_table(), cp_);
+}
+
+fn to_unicode_with(tbl: *CxList(i64), cp_: i64) i64 {
+    return @as(i64, (if ((cp_ < 0)) 65533 else (if ((cp_ < 128)) cx_list_at(tbl, cp_) else (if ((cp_ < 2176)) b3: { const block: i64 = cce_tier1_block(cp_); break :b3 @as(i64, (if ((block < 0)) 65533 else (cce_tier1_block_unicode_base(block) +% cce_tier1_offset_in_block(cp_)))); } else @as(i64, (if ((cp_ < 67712)) to_unicode_tier2(cp_, 0) else 65533))))));
+}
+
+fn to_unicode_tier2(cp_: i64, block: i64) i64 {
+    var _tl_block = block;
+    while (true) {
+        if ((_tl_block >= cce_tier2_block_count())) { return 65533; } else { const block_base: i64 = cce_tier2_cce_base(_tl_block); const block_size: i64 = cce_tier2_block_size(_tl_block); if ((cp_ >= block_base)) { if ((cp_ < (block_base +% block_size))) { return (cce_tier2_block_unicode_base(_tl_block) +% (cp_ -% block_base)); } else { { const _tj5_1 = (_tl_block +% 1); _tl_block = _tj5_1; continue; } } } else { { const _tj4_1 = (_tl_block +% 1); _tl_block = _tj4_1; continue; } } }
+    }
+}
+
+fn utf8_from_text_loop(t: []const u8, i_: i64, len_: i64, acc_: *CxList(i64)) *CxList(i64) {
+    var _tl_i = i_;
+    var _tl_acc = acc_;
+    while (true) {
+        if ((_tl_i >= len_)) { return _tl_acc; } else { const n_: i64 = cce_decode_length((cx_char_at(t, _tl_i))); const u_: i64 = to_unicode(cce_decode_at(t, _tl_i)); { const _tj3_1 = (_tl_i +% n_); const _tj3_3 = cx_ll_concat(_tl_acc, (if ((u_ < 0)) cx_ll_empty(i64) else (if ((u_ < 128)) cx_ll_of(i64, &[_]i64{ u_ }) else (if ((u_ < 2048)) cx_ll_of(i64, &[_]i64{ (192 | cx_shru(u_, 6)), (128 | (u_ & 63)) }) else (if ((u_ < 65536)) cx_ll_of(i64, &[_]i64{ (224 | cx_shru(u_, 12)), (128 | (cx_shru(u_, 6) & 63)), (128 | (u_ & 63)) }) else cx_ll_of(i64, &[_]i64{ (240 | cx_shru(u_, 18)), (128 | (cx_shru(u_, 12) & 63)), (128 | (cx_shru(u_, 6) & 63)), (128 | (u_ & 63)) })))))); _tl_i = _tj3_1; _tl_acc = _tj3_3; continue; } }
+    }
+}
+
 fn iv_i64_max() i64 {
     return 9223372036854775807;
 }
@@ -5874,6 +5958,14 @@ fn cdx_undefined_name() i64 {
 
 fn cdx_chapter_pagination() i64 {
     return 3004;
+}
+
+fn cdx_shadows_builtin() i64 {
+    return 3005;
+}
+
+fn cdx_collides_across_chapters() i64 {
+    return 3006;
 }
 
 fn cdx_undefined_type_name() i64 {
@@ -9321,6 +9413,37 @@ fn find_collisions_loop(assignments: *CxList(ChapterAssignment), i_: i64, len_: 
     var _tl_seen_slugs = seen_slugs;
     while (true) {
         if ((_tl_i == len_)) { return _tl_acc; } else { const a_ = cx_list_at(assignments, _tl_i); if (cx_text_eq(a_.def_name, opening_entry_point())) { { const _tj3_1 = (_tl_i +% 1); const _tj3_3 = _tl_acc; const _tj3_4 = _tl_seen_names; const _tj3_5 = _tl_seen_slugs; _tl_i = _tj3_1; _tl_acc = _tj3_3; _tl_seen_names = _tj3_4; _tl_seen_slugs = _tj3_5; continue; } } else { if (skip_list_text_has(_tl_acc, a_.def_name)) { { const _tj4_1 = (_tl_i +% 1); const _tj4_3 = _tl_acc; const _tj4_4 = _tl_seen_names; const _tj4_5 = _tl_seen_slugs; _tl_i = _tj4_1; _tl_acc = _tj4_3; _tl_seen_names = _tj4_4; _tl_seen_slugs = _tj4_5; continue; } } else { const slen: i64 = cx_list_len(_tl_seen_names); const pos: i64 = bsearch_text_set(_tl_seen_names, a_.def_name, 0, slen); if ((pos < slen)) { if (cx_text_eq(cx_list_at(_tl_seen_names, pos), a_.def_name)) { if ((!cx_text_eq(cx_list_at(_tl_seen_slugs, pos), a_.chapter_slug))) { { const _tj9_1 = (_tl_i +% 1); const _tj9_3 = skip_list_text_insert(_tl_acc, a_.def_name); const _tj9_4 = _tl_seen_names; const _tj9_5 = _tl_seen_slugs; _tl_i = _tj9_1; _tl_acc = _tj9_3; _tl_seen_names = _tj9_4; _tl_seen_slugs = _tj9_5; continue; } } else { { const _tj9_1 = (_tl_i +% 1); const _tj9_3 = _tl_acc; const _tj9_4 = _tl_seen_names; const _tj9_5 = _tl_seen_slugs; _tl_i = _tj9_1; _tl_acc = _tj9_3; _tl_seen_names = _tj9_4; _tl_seen_slugs = _tj9_5; continue; } } } else { { const _tj8_1 = (_tl_i +% 1); const _tj8_3 = _tl_acc; const _tj8_4 = cx_ll_insert_at(_tl_seen_names, pos, a_.def_name); const _tj8_5 = cx_ll_insert_at(_tl_seen_slugs, pos, a_.chapter_slug); _tl_i = _tj8_1; _tl_acc = _tj8_3; _tl_seen_names = _tj8_4; _tl_seen_slugs = _tj8_5; continue; } } } else { { const _tj7_1 = (_tl_i +% 1); const _tj7_3 = _tl_acc; const _tj7_4 = cx_ll_insert_at(_tl_seen_names, pos, a_.def_name); const _tj7_5 = cx_ll_insert_at(_tl_seen_slugs, pos, a_.chapter_slug); _tl_i = _tj7_1; _tl_acc = _tj7_3; _tl_seen_names = _tj7_4; _tl_seen_slugs = _tj7_5; continue; } } } } }
+    }
+}
+
+fn count_openings(assignments: *CxList(ChapterAssignment), i_: i64, len_: i64, count: i64) i64 {
+    var _tl_i = i_;
+    var _tl_count = count;
+    while (true) {
+        if ((_tl_i == len_)) { return _tl_count; } else { const a_ = cx_list_at(assignments, _tl_i); if (cx_text_eq(a_.def_name, opening_entry_point())) { { const _tj3_1 = (_tl_i +% 1); const _tj3_3 = (_tl_count +% 1); _tl_i = _tj3_1; _tl_count = _tj3_3; continue; } } else { { const _tj3_1 = (_tl_i +% 1); const _tj3_3 = _tl_count; _tl_i = _tj3_1; _tl_count = _tj3_3; continue; } } }
+    }
+}
+
+fn check_shadowed_builtins(headers: *CxList(DefHeader), bset: SkipListText, i_: i64, len_: i64, acc_: *CxList(Diagnostic)) *CxList(Diagnostic) {
+    var _tl_i = i_;
+    var _tl_acc = acc_;
+    while (true) {
+        if ((_tl_i >= len_)) { return _tl_acc; } else { const h_ = cx_list_at(headers, _tl_i); const n_ = token_text(h_.name); if (skip_list_text_has(bset, n_)) { { const _tj4_2 = (_tl_i +% 1); const _tj4_4 = cx_ll_push(_tl_acc, make_warning(cdx_shadows_builtin(), cx_concat(cx_concat("\x30\x0d\x1c\x11\x12\x11\x0e\x11\x10\x12\x02\x47", n_), "\x47\x02\x14\x0f\x13\x02\x0e\x14\x0d\x02\x13\x0f\x1a\x0d\x02\x12\x0f\x1a\x0d\x02\x0f\x13\x02\x0f\x02\x20\x19\x11\x17\x0e\x11\x12\x41\x02\x35\x14\x0d\x0e\x14\x0d\x15\x02\x0f\x02\x18\x0f\x17\x17\x02\x13\x11\x0e\x0d\x02\x1d\x0d\x0e\x13\x02\x0e\x14\x11\x13\x02\x16\x0d\x1c\x11\x12\x11\x0e\x11\x10\x12\x02\x10\x15\x02\x0e\x14\x0d\x02\x20\x19\x11\x17\x0e\x11\x12\x02\x16\x0d\x1f\x0d\x12\x16\x13\x02\x10\x12\x02\x14\x10\x1b\x02\x0e\x14\x0f\x0e\x02\x20\x19\x11\x17\x0e\x11\x12\x02\x11\x13\x02\x17\x10\x1b\x0d\x15\x0d\x16\x42\x02\x0f\x12\x16\x02\x0e\x14\x0d\x02\x13\x10\x19\x15\x18\x0d\x02\x16\x10\x0d\x13\x02\x12\x10\x0e\x02\x13\x0f\x1e\x02\x1b\x14\x11\x18\x14\x02\x49\x49\x02\x13\x10\x02\x11\x1c\x02\x0e\x14\x11\x13\x02\x11\x13\x02\x16\x0d\x17\x11\x20\x0d\x15\x0f\x0e\x0d\x42\x02\x11\x0e\x02\x11\x13\x02\x16\x0d\x17\x11\x20\x0d\x15\x0f\x0e\x0d\x02\x0f\x20\x10\x19\x0e\x02\x13\x10\x1a\x0d\x0e\x14\x11\x12\x1d\x02\x1e\x10\x19\x02\x18\x0f\x12\x12\x10\x0e\x02\x15\x0d\x0f\x16\x02\x14\x0d\x15\x0d\x41\x02\x2b\x1c\x02\x11\x0e\x02\x11\x13\x02\x12\x10\x0e\x42\x02\x15\x0d\x12\x0f\x1a\x0d\x02\x11\x0e\x41\x02\x32\x14\x0d\x18\x22\x02\x0e\x14\x0d\x02\x32\x2a\x2d\x28\x02\x0f\x13\x02\x1b\x0d\x17\x17\x02\x0f\x13\x02\x0e\x14\x0d\x02\x0f\x12\x13\x1b\x0d\x15\x45\x02\x0f\x02\x13\x14\x0f\x16\x10\x1b\x02\x0e\x14\x0f\x0e\x02\x18\x10\x1a\x1f\x19\x0e\x0d\x13\x02\x0e\x14\x0d\x02\x13\x0f\x1a\x0d\x02\x15\x0d\x13\x19\x17\x0e\x02\x1a\x10\x15\x0d\x02\x13\x17\x10\x1b\x17\x1e\x02\x11\x13\x02\x0e\x14\x0d\x02\x1c\x0f\x11\x17\x19\x15\x0d\x02\x1a\x10\x16\x0d\x02\x0e\x14\x0f\x0e\x02\x14\x0f\x13\x02\x0f\x18\x0e\x19\x0f\x17\x17\x1e\x02\x18\x10\x13\x0e\x02\x0e\x11\x1a\x0d\x02\x14\x0d\x15\x0d\x41\x02\x28\x14\x11\x13\x02\x18\x14\x0f\x1f\x0e\x0d\x15\x47\x13\x02\x13\x14\x0f\x16\x10\x1b\x02\x0f\x1f\x1f\x17\x11\x0d\x13\x02\x0e\x10\x02\x0e\x14\x0d\x02\x1b\x14\x10\x17\x0d\x02\x18\x10\x1a\x1f\x11\x17\x0f\x0e\x11\x10\x12\x02\x19\x12\x11\x0e\x42\x02\x0f\x12\x16\x02\x0e\x10\x02\x0f\x12\x1e\x02\x19\x12\x11\x0e\x02\x0e\x14\x0f\x0e\x02\x18\x11\x0e\x0d\x13\x02\x11\x0e\x41"), token_span(h_.name))); _tl_i = _tj4_2; _tl_acc = _tj4_4; continue; } } else { { const _tj4_2 = (_tl_i +% 1); const _tj4_4 = _tl_acc; _tl_i = _tj4_2; _tl_acc = _tj4_4; continue; } } }
+    }
+}
+
+fn colliding_other_chapter(assignments: *CxList(ChapterAssignment), name: []const u8, own_slug: []const u8, i_: i64, len_: i64) []const u8 {
+    var _tl_i = i_;
+    while (true) {
+        if ((_tl_i >= len_)) { return ""; } else { const a_ = cx_list_at(assignments, _tl_i); if (cx_text_eq(a_.def_name, name)) { if ((!cx_text_eq(a_.chapter_slug, own_slug))) { return a_.chapter_slug; } else { { const _tj4_3 = (_tl_i +% 1); _tl_i = _tj4_3; continue; } } } else { { const _tj3_3 = (_tl_i +% 1); _tl_i = _tj3_3; continue; } } }
+    }
+}
+
+fn check_cross_chapter_collisions(headers: *CxList(DefHeader), colliding: SkipListText, assignments: *CxList(ChapterAssignment), i_: i64, len_: i64, acc_: *CxList(Diagnostic)) *CxList(Diagnostic) {
+    var _tl_i = i_;
+    var _tl_acc = acc_;
+    while (true) {
+        if ((_tl_i >= len_)) { return _tl_acc; } else { const h_ = cx_list_at(headers, _tl_i); const n_ = token_text(h_.name); if (skip_list_text_has(colliding, n_)) { const other = colliding_other_chapter(assignments, n_, h_.chapter_slug, 0, cx_list_len(assignments)); { const _tj5_3 = (_tl_i +% 1); const _tj5_5 = cx_ll_push(_tl_acc, make_warning(cdx_collides_across_chapters(), cx_concat(cx_concat(cx_concat(cx_concat("\x30\x0d\x1c\x11\x12\x11\x0e\x11\x10\x12\x02\x47", n_), "\x47\x02\x11\x13\x02\x0f\x17\x13\x10\x02\x16\x0d\x1c\x11\x12\x0d\x16\x02\x11\x12\x02\x18\x14\x0f\x1f\x0e\x0d\x15\x02\x47"), other), "\x47\x41\x02\x3a\x10\x0e\x14\x02\x0f\x15\x0d\x02\x22\x0d\x1f\x0e\x02\x0f\x12\x16\x02\x0d\x0f\x18\x14\x02\x18\x14\x0f\x1f\x0e\x0d\x15\x02\x13\x0d\x0d\x13\x02\x11\x0e\x13\x02\x10\x1b\x12\x42\x02\x13\x10\x02\x0e\x14\x11\x13\x02\x18\x10\x1a\x1f\x11\x17\x0d\x13\x02\x0f\x12\x16\x02\x15\x19\x12\x13\x02\x49\x49\x02\x20\x19\x0e\x02\x1b\x14\x11\x18\x14\x02\x16\x0d\x1c\x11\x12\x11\x0e\x11\x10\x12\x02\x0f\x02\x1a\x0d\x12\x0e\x11\x10\x12\x02\x1d\x0d\x0e\x13\x02\x16\x0d\x1f\x0d\x12\x16\x13\x02\x10\x12\x02\x0e\x14\x0d\x02\x18\x14\x0f\x1f\x0e\x0d\x15\x02\x0e\x14\x0d\x02\x1a\x0d\x12\x0e\x11\x10\x12\x02\x13\x11\x0e\x13\x02\x11\x12\x42\x02\x0f\x12\x16\x02\x11\x12\x02\x0f\x02\x18\x14\x0f\x1f\x0e\x0d\x15\x02\x0e\x14\x0f\x0e\x02\x16\x0d\x1c\x11\x12\x0d\x13\x02\x12\x0d\x11\x0e\x14\x0d\x15\x02\x11\x0e\x02\x16\x0d\x1f\x0d\x12\x16\x13\x02\x10\x12\x02\x0e\x14\x0d\x02\x10\x15\x16\x0d\x15\x02\x0e\x14\x0d\x02\x20\x19\x11\x17\x16\x02\x1d\x17\x10\x20\x13\x02\x1c\x11\x17\x0d\x13\x41\x02\x34\x10\x21\x0d\x02\x0e\x14\x11\x13\x02\x20\x10\x16\x1e\x02\x0e\x10\x02\x0e\x14\x0d\x02\x10\x0e\x14\x0d\x15\x02\x18\x14\x0f\x1f\x0e\x0d\x15\x02\x0f\x12\x16\x02\x11\x0e\x02\x13\x11\x17\x0d\x12\x0e\x17\x1e\x02\x1a\x0d\x0f\x12\x13\x02\x0e\x14\x0d\x02\x10\x0e\x14\x0d\x15\x02\x0e\x14\x11\x12\x1d\x41\x02\x37\x11\x21\x0d\x02\x10\x12\x0d\x02\x10\x1c\x02\x0e\x14\x0d\x1a\x02\x0f\x02\x18\x14\x0f\x1f\x0e\x0d\x15\x49\x13\x1f\x0d\x18\x11\x1c\x11\x18\x02\x1f\x15\x0d\x1c\x11\x24\x42\x02\x10\x15\x02\x18\x11\x0e\x0d\x02\x0e\x14\x0d\x02\x10\x12\x0d\x02\x1e\x10\x19\x02\x1a\x0d\x0f\x12\x02\x11\x12\x13\x0e\x0d\x0f\x16\x02\x10\x1c\x02\x16\x0d\x1c\x11\x12\x11\x12\x1d\x02\x11\x0e\x02\x0e\x1b\x11\x18\x0d\x41"), token_span(h_.name))); _tl_i = _tj5_3; _tl_acc = _tj5_5; continue; } } else { { const _tj4_3 = (_tl_i +% 1); const _tj4_5 = _tl_acc; _tl_i = _tj4_3; _tl_acc = _tj4_5; continue; } } }
     }
 }
 
@@ -18678,12 +18801,40 @@ fn czg_halted(es: *CxList(Diagnostic)) []const u8 {
     return b0: { const n_: i64 = cx_list_len(es); break :b0 b1: { const e0 = cx_list_at(es, 0); break :b1 cx_concat(cx_concat(cx_concat(cx_concat(cx_concat(cx_concat("\x32\x2a\x30\x27\x37\x27\x2c\x49\x2e\x29\x31\x28\x27\x30\x45\x02", cx_show_int(n_)), "\x02\x0d\x15\x15\x10\x15\x4a\x13\x4b\x46\x02\x12\x10\x02\x26\x11\x1d\x02\x0d\x1a\x11\x0e\x0e\x0d\x16\x46\x02\x1c\x11\x15\x13\x0e\x02\x32\x30\x3e"), cx_show_int(e0.code_)), "\x02"), e0.message), ""); }; };
 }
 
+fn czg_sev_word(s_: i64) []const u8 {
+    return (if ((s_ == sev_warning())) "\x1b\x0f\x15\x12\x11\x12\x1d" else "\x12\x10\x0e\x11\x18\x0d");
+}
+
+fn czg_line_bytes(t: []const u8) *CxList(i64) {
+    return cx_ll_push(utf8_from_text_loop(t, 0, cx_text_len(t), cx_ll_empty(i64)), 10);
+}
+
+fn czg_notices(ds: *CxList(Diagnostic), i_: i64, acc_: *CxList(i64)) *CxList(i64) {
+    var _tl_i = i_;
+    var _tl_acc = acc_;
+    while (true) {
+        if ((_tl_i >= cx_list_len(ds))) { return _tl_acc; } else { const d_ = cx_list_at(ds, _tl_i); if ((d_.severity == sev_info())) { { const _tj3_1 = (_tl_i +% 1); const _tj3_2 = _tl_acc; _tl_i = _tj3_1; _tl_acc = _tj3_2; continue; } } else { { const _tj3_1 = (_tl_i +% 1); const _tj3_2 = cx_ll_concat(_tl_acc, czg_line_bytes(cx_concat(cx_concat(cx_concat(cx_concat(cx_concat("\x32\x30\x3e", cx_show_int(d_.code_)), "\x02"), czg_sev_word(d_.severity)), "\x45\x02"), d_.message))); _tl_i = _tj3_1; _tl_acc = _tj3_2; continue; } } }
+    }
+}
+
+fn czg_info_count(ds: *CxList(Diagnostic), i_: i64, n_: i64) i64 {
+    var _tl_i = i_;
+    var _tl_n = n_;
+    while (true) {
+        if ((_tl_i >= cx_list_len(ds))) { return _tl_n; } else { const d_ = cx_list_at(ds, _tl_i); if ((d_.severity == sev_info())) { { const _tj3_1 = (_tl_i +% 1); const _tj3_2 = (_tl_n +% 1); _tl_i = _tj3_1; _tl_n = _tj3_2; continue; } } else { { const _tj3_1 = (_tl_i +% 1); const _tj3_2 = _tl_n; _tl_i = _tj3_1; _tl_n = _tj3_2; continue; } } }
+    }
+}
+
+fn czg_report(b_: DiagnosticBag) *CxList(i64) {
+    return b0: { const ds = b_.diagnostics; break :b0 b1: { const body = czg_notices(ds, 0, cx_ll_empty(i64)); break :b1 b2: { const n_: i64 = czg_info_count(ds, 0, 0); break :b2 (if ((n_ == 0)) body else cx_ll_concat(body, czg_line_bytes(cx_concat(cx_concat("\x18\x10\x16\x0d\x24\x26\x11\x1d\x45\x02", cx_show_int(n_)), "\x02\x11\x12\x1c\x10\x02\x16\x11\x0f\x1d\x12\x10\x13\x0e\x11\x18\x13\x02\x12\x10\x0e\x02\x13\x14\x10\x1b\x12")))); }; }; };
+}
+
 fn czg_emit_roots() *CxList([]const u8) {
     return cx_ll_of([]const u8, &[_][]const u8{ "\x10\x1f\x0d\x12\x11\x12\x1d", "\x21\x20\x49\x18\x0f\x1f\x0f\x18\x11\x0e\x1e\x49\x0f\x19\x0e\x10", "\x21\x20\x49\x15\x0d\x0f\x16\x49\x0f\x19\x0e\x10", "\x21\x20\x49\x1b\x15\x11\x0e\x0d\x49\x0f\x19\x0e\x10", "\x1c\x0f\x0e\x04\x09\x49\x13\x0d\x15\x21\x11\x18\x0d\x15\x49\x15\x0d\x0f\x16", "\x1c\x0f\x0e\x04\x09\x49\x13\x0d\x15\x21\x11\x18\x0d\x15\x49\x1b\x15\x11\x0e\x0d" });
 }
 
 fn opening() void {
-    return b0: { const src = cx_read_file_uni("\x51\x16\x0d\x21\x51\x13\x0e\x16\x11\x12"); _ = b1: { _ = init_phase_allocator(); break :b1 b2: { const deck_base: i64 = cx_heap_save(); break :b2 b3: { _ = cx_deck_set(deck_base); break :b3 b4: { _ = cx_heap_advance(536870912); break :b4 b5: { const toks = tokenize(src, 1); break :b5 b6: { const scan = scan_document(make_parse_state(toks.tokens, src)); break :b6 b7: { const assignments = build_all_assignments(src, scan.def_headers, 0, cx_ll_empty(ChapterAssignment)); break :b7 b8: { const colliding = find_collisions_loop(assignments, 0, cx_list_len(assignments), skip_list_text_empty(), cx_ll_empty([]const u8), cx_ll_empty([]const u8)); break :b8 b9: { const renames = build_global_rename_table(assignments, colliding); break :b9 b10: { const doc = parse_document(make_parse_state(toks.tokens, src), 0); break :b10 b11: { const dr = desugar_document(src, doc, doc.chapter_title, 0); break :b11 b12: { const ch0 = dr.dr_chapter; break :b12 b13: { const _v13_ch = scope_achapter(ch0, colliding, assignments, 0); break :b13 b14: { const rr = resolve_chapter_with_citations(_v13_ch, cx_ll_empty(ResolveResult), colliding, assignments, 0); break :b14 b15: { const cr = check_chapter(_v13_ch, renames, colliding, assignments, 0); break :b15 b16: { const resolved_et = map_list(ExprTypeEntry, ExprTypeEntry, b18: { const _Env18 = struct { a0: ChapterResult, fn call(_ctx18: *anyopaque, p0: ExprTypeEntry) ExprTypeEntry { const _e18: *@This() = @ptrCast(@alignCast(_ctx18)); return __lam_425(ExprTypeEntry, _e18.a0, p0); } }; break :b18 CxFn1(ExprTypeEntry, ExprTypeEntry){ .ctx = cx_new(_Env18{ .a0 = cr }), .call = &_Env18.call }; }, sort_expr_types(cr.state.expr_types)); break :b16 b17: { const cst = b18: { const _r18 = cr.state; _r18.expr_types = resolved_et; break :b18 _r18; }; break :b17 b18: { const resolved_env = map_list(TypeBinding, TypeBinding, b20: { const _Env20 = struct { a0: UnificationState, fn call(_ctx20: *anyopaque, p0: TypeBinding) TypeBinding { const _e20: *@This() = @ptrCast(@alignCast(_ctx20)); return __lam_426(TypeBinding, _e20.a0, p0); } }; break :b20 CxFn1(TypeBinding, TypeBinding){ .ctx = cx_new(_Env20{ .a0 = cst }), .call = &_Env20.call }; }, cr.env.bindings); break :b18 b19: { const bound = map_list(TypeBinding, TypeBinding, b21: { const _Env21 = struct { a0: UnificationState, fn call(_ctx21: *anyopaque, p0: TypeBinding) TypeBinding { const _e21: *@This() = @ptrCast(@alignCast(_ctx21)); return __lam_427(TypeBinding, _e21.a0, p0); } }; break :b21 CxFn1(TypeBinding, TypeBinding){ .ctx = cx_new(_Env21{ .a0 = cst }), .call = &_Env21.call }; }, sort_bindings(cx_ll_concat(cr.types, resolved_env))); break :b19 b20: { const ir_raw = lower_chapter(_v13_ch, bound, cst, rr.ctor_names, renames, colliding, assignments, 0); break :b20 b21: { const passed = run_ir_pipeline(default_ir_pipeline(), ir_raw, false); break :b21 b22: { const ir0 = passed.chapter; break :b22 b23: { const ir = lift_lambdas(ir0, 0); break :b23 b24: { const czg_bag = bag_merge_all(cx_ll_of(DiagnosticBag, &[_]DiagnosticBag{ bag_from_list(toks.errors), doc.parse_bag, rr.bag, cr.state.bag })); break :b24 (if ((czg_bag.error_count > 0)) cx_print(czg_halted(bag_errors_loop(czg_bag.diagnostics, cx_ll_empty(Diagnostic), 0, cx_list_len(czg_bag.diagnostics)))) else b26: { const meta = cx_new(IRTextMetaS{ .chapter_title = _v13_ch.chapter_title, .prose = _v13_ch.prose, .section_titles = _v13_ch.section_titles, .ctor_names = rr.ctor_names, .prose_blocks = _v13_ch.prose_blocks, .annotations = _v13_ch.annotations, .ground_effects = _v13_ch.ground_effects }); break :b26 b27: { const ir_text = emit_ir_chapter(ir_prune_unreachable_roots(ir, czg_emit_roots()), meta, _v13_ch.type_defs); break :b27 b28: { const parsed = parse_ir_chapter(ir_text); break :b28 cx_print(emit_zig_chapter(parsed.chapter, parsed.type_defs)); }; }; }); }; }; }; }; }; }; }; }; }; }; }; }; }; }; }; }; }; }; }; }; }; }; }; }; break :b0; };
+    return b0: { const src = cx_read_file_uni("\x51\x16\x0d\x21\x51\x13\x0e\x16\x11\x12"); _ = b1: { _ = init_phase_allocator(); break :b1 b2: { const deck_base: i64 = cx_heap_save(); break :b2 b3: { _ = cx_deck_set(deck_base); break :b3 b4: { _ = cx_heap_advance(536870912); break :b4 b5: { const toks = tokenize(src, 1); break :b5 b6: { const scan = scan_document(make_parse_state(toks.tokens, src)); break :b6 b7: { const assignments = build_all_assignments(src, scan.def_headers, 0, cx_ll_empty(ChapterAssignment)); break :b7 b8: { const colliding = find_collisions_loop(assignments, 0, cx_list_len(assignments), skip_list_text_empty(), cx_ll_empty([]const u8), cx_ll_empty([]const u8)); break :b8 b9: { const renames = build_global_rename_table(assignments, colliding); break :b9 b10: { const doc = parse_document(make_parse_state(toks.tokens, src), 0); break :b10 b11: { const dr = desugar_document(src, doc, doc.chapter_title, 0); break :b11 b12: { const ch0 = dr.dr_chapter; break :b12 b13: { const _v13_ch = scope_achapter(ch0, colliding, assignments, 0); break :b13 b14: { const rr = resolve_chapter_with_citations(_v13_ch, cx_ll_empty(ResolveResult), colliding, assignments, 0); break :b14 b15: { const cr = check_chapter(_v13_ch, renames, colliding, assignments, 0); break :b15 b16: { const resolved_et = map_list(ExprTypeEntry, ExprTypeEntry, b18: { const _Env18 = struct { a0: ChapterResult, fn call(_ctx18: *anyopaque, p0: ExprTypeEntry) ExprTypeEntry { const _e18: *@This() = @ptrCast(@alignCast(_ctx18)); return __lam_425(ExprTypeEntry, _e18.a0, p0); } }; break :b18 CxFn1(ExprTypeEntry, ExprTypeEntry){ .ctx = cx_new(_Env18{ .a0 = cr }), .call = &_Env18.call }; }, sort_expr_types(cr.state.expr_types)); break :b16 b17: { const cst = b18: { const _r18 = cr.state; _r18.expr_types = resolved_et; break :b18 _r18; }; break :b17 b18: { const resolved_env = map_list(TypeBinding, TypeBinding, b20: { const _Env20 = struct { a0: UnificationState, fn call(_ctx20: *anyopaque, p0: TypeBinding) TypeBinding { const _e20: *@This() = @ptrCast(@alignCast(_ctx20)); return __lam_426(TypeBinding, _e20.a0, p0); } }; break :b20 CxFn1(TypeBinding, TypeBinding){ .ctx = cx_new(_Env20{ .a0 = cst }), .call = &_Env20.call }; }, cr.env.bindings); break :b18 b19: { const bound = map_list(TypeBinding, TypeBinding, b21: { const _Env21 = struct { a0: UnificationState, fn call(_ctx21: *anyopaque, p0: TypeBinding) TypeBinding { const _e21: *@This() = @ptrCast(@alignCast(_ctx21)); return __lam_427(TypeBinding, _e21.a0, p0); } }; break :b21 CxFn1(TypeBinding, TypeBinding){ .ctx = cx_new(_Env21{ .a0 = cst }), .call = &_Env21.call }; }, sort_bindings(cx_ll_concat(cr.types, resolved_env))); break :b19 b20: { const ir_raw = lower_chapter(_v13_ch, bound, cst, rr.ctor_names, renames, colliding, assignments, 0); break :b20 b21: { const passed = run_ir_pipeline(default_ir_pipeline(), ir_raw, false); break :b21 b22: { const ir0 = passed.chapter; break :b22 b23: { const ir = lift_lambdas(ir0, 0); break :b23 b24: { const czg_bset = skip_list_text_from_list(builtin_names()); break :b24 b25: { const czg_shadow_bag = bag_from_list(check_shadowed_builtins(scan.def_headers, czg_bset, 0, cx_list_len(scan.def_headers), cx_ll_empty(Diagnostic))); break :b25 b26: { const czg_collide_bag = bag_from_list(check_cross_chapter_collisions(scan.def_headers, colliding, assignments, 0, cx_list_len(scan.def_headers), cx_ll_empty(Diagnostic))); break :b26 b27: { const czg_entry_bag = bag_from_list((if ((count_openings(assignments, 0, cx_list_len(assignments), 0) >= 2)) cx_ll_of(Diagnostic, &[_]Diagnostic{ make_error(cdx_duplicate_definition(), "\x47\x10\x1f\x0d\x12\x11\x12\x1d\x47\x02\x11\x13\x02\x16\x0d\x1c\x11\x12\x0d\x16\x02\x11\x12\x02\x1a\x19\x17\x0e\x11\x1f\x17\x0d\x02\x18\x14\x0f\x1f\x0e\x0d\x15\x13\x41\x02\x29\x02\x1f\x15\x10\x1d\x15\x0f\x1a\x02\x14\x0f\x13\x02\x0d\x24\x0f\x18\x0e\x17\x1e\x02\x10\x12\x0d\x02\x0d\x12\x0e\x15\x1e\x02\x1f\x10\x11\x12\x0e\x41", synthetic_span()) }) else cx_ll_empty(Diagnostic))); break :b27 b28: { const czg_bag = bag_merge_all(cx_ll_of(DiagnosticBag, &[_]DiagnosticBag{ bag_from_list(toks.errors), doc.parse_bag, rr.bag, cr.state.bag, czg_shadow_bag, czg_collide_bag, czg_entry_bag })); break :b28 (if ((czg_bag.error_count > 0)) cx_print(czg_halted(bag_errors_loop(czg_bag.diagnostics, cx_ll_empty(Diagnostic), 0, cx_list_len(czg_bag.diagnostics)))) else b30: { const meta = cx_new(IRTextMetaS{ .chapter_title = _v13_ch.chapter_title, .prose = _v13_ch.prose, .section_titles = _v13_ch.section_titles, .ctor_names = rr.ctor_names, .prose_blocks = _v13_ch.prose_blocks, .annotations = _v13_ch.annotations, .ground_effects = _v13_ch.ground_effects }); break :b30 b31: { const ir_text = emit_ir_chapter(ir_prune_unreachable_roots(ir, czg_emit_roots()), meta, _v13_ch.type_defs); break :b31 b32: { const parsed = parse_ir_chapter(ir_text); break :b32 b33: { _ = cx_write_binary(czg_report(czg_bag)); _ = cx_print(emit_zig_chapter(parsed.chapter, parsed.type_defs)); break :b33; }; }; }; }); }; }; }; }; }; }; }; }; }; }; }; }; }; }; }; }; }; }; }; }; }; }; }; }; }; }; }; }; break :b0; };
 }
 
 fn __lam_0(s_: CodegenState, a_: *CxList(IRExpr)) EmitResult {

@@ -62010,6 +62010,58 @@ Section: Halt
    in "CODEGEN-HALTED: " & show n & " error(s); no zig emitted; first CDX" & show (e0.code) & " " & (e0.message) & "
 "
 
+ THE NON-ERROR DIAGNOSTICS GO TO STDOUT, and until 2026-08-30 they went
+ nowhere. This harness merged the driver's four bags and then asked one
+ predicate, `bag-has-errors`, so on a clean compile every warning and info sat
+ in `czg-bag` and was discarded. A driving-screensaver port compiled fifteen
+ units through this tool and through the seed, got byte-identical program
+ output, and learned only from the seed that it carried ten real CDX3006 name
+ collisions -- two definitions of one name in two chapters, four times over.
+ It had been green its whole life.
+
+ STDOUT AND NOT print-text, because `print-text` is `std.debug.print`, which is
+ stderr -- and stderr is where this tool's OUTPUT goes. `codexzig < prog.codex
+ 2> prog.zig` is the invocation. A warning printed the ordinary way would land
+ inside the emitted zig. `write-binary` is the only route to fd 1 from Codex
+ and it takes raw bytes, which is what `text-to-utf8-bytes` in Foreword chapter
+ CCE is for -- the symmetric partner of `utf8-bytes-to-text`, already in this
+ bundle, so nothing needed to be added to the compiler.
+
+ INFOS ARE COUNTED, NOT PRINTED. Those same fifteen units carried 3,685
+ CDX4010 `bounds proven` infos against the ten warnings. Printing every
+ non-error would bury the thing worth reading in its own telemetry.
+
+  czg-sev-word : Integer -> Text
+  czg-sev-word (s) = if s == sev-warning then "warning" else "notice"
+
+  czg-notice-line : Diagnostic -> Text
+  czg-notice-line (d) = "CDX" & show (d.code) & " " & czg-sev-word (d.severity) & ": " & (d.message)
+
+  czg-line-bytes : Text -> List Integer
+  czg-line-bytes (t) = list-push (text-to-utf8-bytes t) 10
+
+  czg-notices : List Diagnostic, Integer, List Integer -> List Integer
+  czg-notices (ds) (i) (acc) =
+   if i >= list-length ds then acc
+   else let d = list-at ds i
+   in if (d.severity) == sev-info then czg-notices ds (i + 1) acc
+   else czg-notices ds (i + 1) (acc & czg-line-bytes (czg-notice-line d))
+
+  czg-info-count : List Diagnostic, Integer, Integer -> Integer
+  czg-info-count (ds) (i) (n) =
+   if i >= list-length ds then n
+   else let d = list-at ds i
+   in if (d.severity) == sev-info then czg-info-count ds (i + 1) (n + 1)
+   else czg-info-count ds (i + 1) n
+
+  czg-report : DiagnosticBag -> List Integer
+  czg-report (b) =
+   let ds = bag-diagnostics b
+   in let body = czg-notices ds 0 []
+   in let n = czg-info-count ds 0 0
+   in if n == 0 then body
+   else body & czg-line-bytes ("codexzig: " & show n & " info diagnostics not shown")
+
 Section: Roots
 
  opening.codex:1316, copied because that chapter cannot ride along.
@@ -62060,7 +62112,11 @@ Section: Driver
     in let passed = run-ir-pipeline default-ir-pipeline ir-raw False
     in let ir0 = passed.chapter
     in let ir = lift-lambdas ir0 0
-    in let czg-bag = bag-merge-all [bag-from-list (toks.errors), doc.parse-bag, rr.bag, cr.state.bag]
+    in let czg-bset = skip-list-text-from-list builtin-names
+    in let czg-shadow-bag = bag-from-list (check-shadowed-builtins (scan.def-headers) czg-bset 0 (list-length (scan.def-headers)) [])
+    in let czg-collide-bag = bag-from-list (check-cross-chapter-collisions (scan.def-headers) colliding assignments 0 (list-length (scan.def-headers)) [])
+    in let czg-entry-bag = bag-from-list (check-entry-point-duplicate assignments)
+    in let czg-bag = bag-merge-all [bag-from-list (toks.errors), doc.parse-bag, rr.bag, cr.state.bag, czg-shadow-bag, czg-collide-bag, czg-entry-bag]
     in if bag-has-errors czg-bag then print-text (czg-halted (bag-errors czg-bag))
     else let meta = IRTextMeta {
       chapter-title = ch.chapter-title,
@@ -62073,7 +62129,10 @@ Section: Driver
     }
     in let ir-text = emit-ir-chapter (ir-prune-unreachable-roots ir czg-emit-roots) meta (ch.type-defs)
     in let parsed = parse-ir-chapter ir-text
-    in print-text (emit-zig-chapter (parsed.chapter) (parsed.type-defs))
+    in act
+      write-binary (czg-report czg-bag)
+      print-text (emit-zig-chapter (parsed.chapter) (parsed.type-defs))
+    end
   end
 
 

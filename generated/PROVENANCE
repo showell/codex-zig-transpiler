@@ -12,15 +12,15 @@ guest      accel=tcg  mem=3072MB
 what each guest was actually handed (intake/):
 
   ringplug-source.codex.blob          370608 bytes   mode 'CDX map'
-  codexzig-subject.codex.blob        2975386 bytes   mode 'IR-CCE decks=172'
-  codexzig.ir.blob                  10079886 bytes   mode 'RING zig'
+  codexzig-subject.codex.blob        2978433 bytes   mode 'IR-CCE decks=172'
+  codexzig.ir.blob                  10129193 bytes   mode 'RING zig'
 
 what each guest touched of its cap:
 
-  ringplug.cdx                       584 MB of 3072 MB
+  ringplug.cdx                       583 MB of 3072 MB
   codexzig.ir                       2465 MB of 3072 MB
-  codexzig.qemu.zig.cce             1048 MB of 3072 MB
+  codexzig.qemu.zig.cce             1052 MB of 3072 MB
 
 fixed point  HOLDS
 arith.codex  MATCHES arith.expected
-built in     449s
+built in     544s
