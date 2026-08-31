@@ -2,7 +2,7 @@ Everything beside this file is emitted by build.py. Nothing here is
 source; edit source/ and rebuild.
 
 checkout   /home/steve/showell_repos/cobblestone-safari
-           2660d3af  zig plug: size the prelude mask split to the table, not to a written-down 50
+           15ef1862  plugs: the mask split's failure mode was impossible, and the ceiling is a gate now
 seed       Codex.cdx  3064878 bytes
 zig        0.16.0
 qemu       QEMU emulator version 8.2.2 (Debian 1:8.2.2+ds-0ubuntu1.18)
@@ -11,12 +11,16 @@ guest      accel=tcg  mem=3072MB
 
 what each guest was actually handed (intake/):
 
-  ringplug-source.codex.blob          378693 bytes   mode 'CDX map'
-  codexzig-subject.codex.blob        2983465 bytes   mode 'IR-CCE decks=172'
-  codexzig.ir.blob                  10089337 bytes   mode 'RING zig'
+  ringplug-source.codex.blob          380728 bytes   mode 'CDX map'
+  codexzig-subject.codex.blob        2985500 bytes   mode 'IR-CCE decks=172'
+  codexzig.ir.blob                  10090148 bytes   mode 'RING zig'
 
-no guest ran (every stage was already current)
+what each guest touched of its cap:
+
+  ringplug.cdx                       581 MB of 3072 MB
+  codexzig.ir                       2469 MB of 3072 MB
+  codexzig.qemu.zig.cce             1029 MB of 3072 MB
 
 fixed point  HOLDS
 arith.codex  MATCHES arith.expected
-built in     4s
+built in     462s
