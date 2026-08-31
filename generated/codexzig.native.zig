@@ -18658,8 +18658,8 @@ fn zig_prelude_names_loop(ps: *CxList(ShakePart), i_: i64, acc_: *CxList([]const
     }
 }
 
-fn zig_prelude_split() i64 {
-    return 50;
+fn zig_mask_split(ns: *CxList([]const u8)) i64 {
+    return @divTrunc(cx_list_len(ns), 2);
 }
 
 fn zig_mask_loop(ns: *CxList([]const u8), prog: []const u8, i_: i64, hi: i64, base_: i64, acc_: i64) i64 {
@@ -18671,18 +18671,18 @@ fn zig_mask_loop(ns: *CxList([]const u8), prog: []const u8, i_: i64, hi: i64, ba
 }
 
 fn zig_mask_lo(ns: *CxList([]const u8), prog: []const u8) i64 {
-    return zig_mask_loop(ns, prog, 0, zig_prelude_split(), 0, 0);
+    return zig_mask_loop(ns, prog, 0, zig_mask_split(ns), 0, 0);
 }
 
 fn zig_mask_hi(ns: *CxList([]const u8), prog: []const u8) i64 {
-    return zig_mask_loop(ns, prog, zig_prelude_split(), cx_list_len(ns), zig_prelude_split(), 0);
+    return b0: { const s_: i64 = zig_mask_split(ns); break :b0 zig_mask_loop(ns, prog, s_, cx_list_len(ns), s_, 0); };
 }
 
-fn zig_roots_mask_loop(ns: *CxList([]const u8), m1: i64, m2: i64, i_: i64, acc_: *CxList([]const u8)) *CxList([]const u8) {
+fn zig_roots_mask_loop(ns: *CxList([]const u8), s_: i64, m1: i64, m2: i64, i_: i64, acc_: *CxList([]const u8)) *CxList([]const u8) {
     var _tl_i = i_;
     var _tl_acc = acc_;
     while (true) {
-        if ((_tl_i >= cx_list_len(ns))) { return _tl_acc; } else { const bit: i64 = (if ((_tl_i < zig_prelude_split())) (cx_shr(m1, _tl_i) & 1) else (cx_shr(m2, (_tl_i -% zig_prelude_split())) & 1)); { const _tj2_3 = (_tl_i +% 1); const _tj2_4 = (if ((bit == 1)) cx_ll_push(_tl_acc, cx_list_at(ns, _tl_i)) else _tl_acc); _tl_i = _tj2_3; _tl_acc = _tj2_4; continue; } }
+        if ((_tl_i >= cx_list_len(ns))) { return _tl_acc; } else { const bit: i64 = (if ((_tl_i < s_)) (cx_shr(m1, _tl_i) & 1) else (cx_shr(m2, (_tl_i -% s_)) & 1)); { const _tj2_4 = (_tl_i +% 1); const _tj2_5 = (if ((bit == 1)) cx_ll_push(_tl_acc, cx_list_at(ns, _tl_i)) else _tl_acc); _tl_i = _tj2_4; _tl_acc = _tj2_5; continue; } }
     }
 }
 
@@ -18695,7 +18695,7 @@ fn zig_stream_defs(ctx_: ZigCtx, defs: *CxList(IRDef), i_: i64, main_text: []con
     var _tl_m1 = m1;
     var _tl_m2 = m2;
     while (true) {
-        if ((_tl_i >= cx_list_len(defs))) { _ = cx_print(main_text); _ = cx_print(zig_postlude_banner()); return cx_print(shake_text(zig_prelude_parts(), zig_roots_mask_loop(ns, _tl_m1, _tl_m2, 0, cx_ll_empty([]const u8)))); } else { const h_: i64 = cx_heap_save(); const text = emit_zig_def(cx_list_at(defs, _tl_i), ctx_); const n1: i64 = (_tl_m1 | zig_mask_lo(ns, text)); const n2: i64 = (_tl_m2 | zig_mask_hi(ns, text)); _ = cx_print(text); _ = cx_heap_restore(h_); { const _tj7_2 = (_tl_i +% 1); const _tj7_5 = n1; const _tj7_6 = n2; _tl_i = _tj7_2; _tl_m1 = _tj7_5; _tl_m2 = _tj7_6; continue; } }
+        if ((_tl_i >= cx_list_len(defs))) { _ = cx_print(main_text); _ = cx_print(zig_postlude_banner()); return cx_print(shake_text(zig_prelude_parts(), zig_roots_mask_loop(ns, zig_mask_split(ns), _tl_m1, _tl_m2, 0, cx_ll_empty([]const u8)))); } else { const h_: i64 = cx_heap_save(); const text = emit_zig_def(cx_list_at(defs, _tl_i), ctx_); const n1: i64 = (_tl_m1 | zig_mask_lo(ns, text)); const n2: i64 = (_tl_m2 | zig_mask_hi(ns, text)); _ = cx_print(text); _ = cx_heap_restore(h_); { const _tj7_2 = (_tl_i +% 1); const _tj7_5 = n1; const _tj7_6 = n2; _tl_i = _tj7_2; _tl_m1 = _tj7_5; _tl_m2 = _tj7_6; continue; } }
     }
 }
 
