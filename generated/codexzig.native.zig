@@ -2558,6 +2558,10 @@ fn text_matches_at_loop(haystack: []const u8, needle: []const u8, start_: i64, i
     }
 }
 
+fn index_of(haystack: []const u8, needle: []const u8) Maybe(i64) {
+    return (if ((cx_text_len(needle) == 0)) Maybe(i64){ .Just = 0 } else (if ((cx_text_len(needle) > cx_text_len(haystack))) Maybe(i64){ .None = {} } else index_of_loop(haystack, needle, 0, ((cx_text_len(haystack) -% cx_text_len(needle)) +% 1))));
+}
+
 fn index_of_loop(haystack: []const u8, needle: []const u8, i_: i64, limit: i64) Maybe(i64) {
     var _tl_i = i_;
     while (true) {
@@ -17305,6 +17309,10 @@ fn emit_zig_binary(op: IRBinaryOp, l_: IRExpr, r_: IRExpr, ctx_: ZigCtx, d_: i64
     return switch (op) { .IrAppendText => cx_concat(cx_concat(cx_concat(cx_concat("\x18\x24\x55\x18\x10\x12\x18\x0f\x0e\x4a", emit_zig_expr(l_, ctx_, (d_ +% 1))), "\x42\x02"), emit_zig_expr(r_, ctx_, (d_ +% 1))), "\x4b"), .IrAppendList => cx_concat(cx_concat(cx_concat(cx_concat("\x18\x24\x55\x17\x17\x55\x18\x10\x12\x18\x0f\x0e\x4a", emit_zig_expr(l_, ctx_, (d_ +% 1))), "\x42\x02"), emit_zig_expr(r_, ctx_, (d_ +% 1))), "\x4b"), .IrConsList => cx_concat(cx_concat(cx_concat(cx_concat("\x18\x24\x55\x17\x17\x55\x18\x10\x12\x13\x4a", emit_zig_expr(l_, ctx_, (d_ +% 1))), "\x42\x02"), emit_zig_expr(r_, ctx_, (d_ +% 1))), "\x4b"), .IrDivInt => cx_concat(cx_concat(cx_concat(cx_concat("\x52\x16\x11\x21\x28\x15\x19\x12\x18\x4a", emit_zig_expr(l_, ctx_, (d_ +% 1))), "\x42\x02"), emit_zig_expr(r_, ctx_, (d_ +% 1))), "\x4b"), .IrRemInt => cx_concat(cx_concat(cx_concat(cx_concat("\x52\x15\x0d\x1a\x4a", emit_zig_expr(l_, ctx_, (d_ +% 1))), "\x42\x02"), emit_zig_expr(r_, ctx_, (d_ +% 1))), "\x4b"), .IrPowInt => cx_concat(cx_concat(cx_concat(cx_concat("\x18\x24\x55\x11\x1f\x10\x1b\x4a", emit_zig_expr(l_, ctx_, (d_ +% 1))), "\x42\x02"), emit_zig_expr(r_, ctx_, (d_ +% 1))), "\x4b"), .IrAnd => cx_concat(cx_concat(cx_concat(cx_concat("\x4a", emit_zig_expr(l_, ctx_, (d_ +% 1))), "\x02\x0f\x12\x16\x02"), emit_zig_expr(r_, ctx_, (d_ +% 1))), "\x4b"), .IrOr => cx_concat(cx_concat(cx_concat(cx_concat("\x4a", emit_zig_expr(l_, ctx_, (d_ +% 1))), "\x02\x10\x15\x02"), emit_zig_expr(r_, ctx_, (d_ +% 1))), "\x4b"), .IrEq => (if ((zig_is_text_type(zig_expr_type(l_)) or zig_is_text_type(zig_expr_type(r_)))) cx_concat(cx_concat(cx_concat(cx_concat("\x18\x24\x55\x0e\x0d\x24\x0e\x55\x0d\x25\x4a", emit_zig_expr(l_, ctx_, (d_ +% 1))), "\x42\x02"), emit_zig_expr(r_, ctx_, (d_ +% 1))), "\x4b") else cx_concat(cx_concat(cx_concat(cx_concat("\x4a", emit_zig_expr(l_, ctx_, (d_ +% 1))), "\x02\x4d\x4d\x02"), emit_zig_expr(r_, ctx_, (d_ +% 1))), "\x4b")), .IrNotEq => (if ((zig_is_text_type(zig_expr_type(l_)) or zig_is_text_type(zig_expr_type(r_)))) cx_concat(cx_concat(cx_concat(cx_concat("\x4a\x43\x18\x24\x55\x0e\x0d\x24\x0e\x55\x0d\x25\x4a", emit_zig_expr(l_, ctx_, (d_ +% 1))), "\x42\x02"), emit_zig_expr(r_, ctx_, (d_ +% 1))), "\x4b\x4b") else cx_concat(cx_concat(cx_concat(cx_concat("\x4a", emit_zig_expr(l_, ctx_, (d_ +% 1))), "\x02\x43\x4d\x02"), emit_zig_expr(r_, ctx_, (d_ +% 1))), "\x4b")), else => cx_concat(cx_concat(cx_concat(cx_concat(cx_concat(cx_concat("\x4a", emit_zig_expr(l_, ctx_, (d_ +% 1))), "\x02"), zig_bin_op_symbol(op)), "\x02"), emit_zig_expr(r_, ctx_, (d_ +% 1))), "\x4b"),  };
 }
 
+fn emit_zig_type_defs(tds: *CxList(ATypeDef), i_: i64) []const u8 {
+    return cx_text_concat_list(emit_zig_type_defs_loop(tds, i_, cx_ll_empty([]const u8)));
+}
+
 fn emit_zig_type_defs_loop(tds: *CxList(ATypeDef), i_: i64, acc_: *CxList([]const u8)) *CxList([]const u8) {
     var _tl_i = i_;
     var _tl_acc = acc_;
@@ -17565,11 +17573,15 @@ fn emit_zig_if_branch(b_: IRExpr, ity: CodexType, other: IRExpr, ctx_: ZigCtx, d
 }
 
 fn emit_zig_list(elems: *CxList(IRExpr), ty: CodexType, ctx_: ZigCtx, d_: i64) []const u8 {
-    return b0: { const annotated = zig_elem_annotation(ty, ctx_.scope_tvars); break :b0 b1: { const et = (if ((cx_text_len(annotated) > 0)) annotated else (if ((cx_list_len(elems) > 0)) emit_zig_type(zig_expr_type(cx_list_at(elems, 0)), ctx_.scope_tvars) else b4: { const fromctx = zig_ll_elem_opt(ctx_.expected, ctx_.scope_tvars); break :b4 (if ((cx_text_len(fromctx) > 0)) fromctx else "\x52\x18\x10\x1a\x1f\x11\x17\x0d\x27\x15\x15\x10\x15\x4a\x48\x26\x11\x1d\x02\x1f\x17\x19\x1d\x45\x02\x12\x10\x02\x0d\x17\x0d\x1a\x0d\x12\x0e\x02\x0e\x1e\x1f\x0d\x02\x1c\x10\x15\x02\x0e\x14\x11\x13\x02\x0d\x1a\x1f\x0e\x1e\x02\x17\x11\x13\x0e\x48\x4b"); })); break :b1 (if ((cx_list_len(elems) == 0)) cx_concat(cx_concat("\x18\x24\x55\x17\x17\x55\x0d\x1a\x1f\x0e\x1e\x4a", et), "\x4b") else cx_concat(cx_concat(cx_concat(cx_concat(cx_concat(cx_concat("\x18\x24\x55\x17\x17\x55\x10\x1c\x4a", et), "\x42\x02\x54\x58\x55\x59"), et), "\x5a\x02"), emit_zig_list_elems(elems, 0, ctx_, d_)), "\x02\x5b\x4b")); }; };
+    return b0: { const annotated = zig_elem_annotation(ty, ctx_.scope_tvars); break :b0 b1: { const et = (if ((cx_text_len(annotated) > 0)) annotated else (if ((cx_list_len(elems) > 0)) emit_zig_type(zig_expr_type(cx_list_at(elems, 0)), ctx_.scope_tvars) else b4: { const fromctx = zig_ll_elem_opt(ctx_.expected, ctx_.scope_tvars); break :b4 (if ((cx_text_len(fromctx) > 0)) fromctx else "\x52\x18\x10\x1a\x1f\x11\x17\x0d\x27\x15\x15\x10\x15\x4a\x48\x26\x11\x1d\x02\x1f\x17\x19\x1d\x45\x02\x12\x10\x02\x0d\x17\x0d\x1a\x0d\x12\x0e\x02\x0e\x1e\x1f\x0d\x02\x1c\x10\x15\x02\x0e\x14\x11\x13\x02\x0d\x1a\x1f\x0e\x1e\x02\x17\x11\x13\x0e\x48\x4b"); })); break :b1 (if ((cx_list_len(elems) == 0)) cx_concat(cx_concat("\x18\x24\x55\x17\x17\x55\x0d\x1a\x1f\x0e\x1e\x4a", et), "\x4b") else cx_concat(cx_concat(cx_concat(cx_concat(cx_concat(cx_concat("\x18\x24\x55\x17\x17\x55\x10\x1c\x4a", et), "\x42\x02\x54\x58\x55\x59"), et), "\x5a\x02"), cx_text_concat_list(emit_zig_list_elems_loop(elems, 0, ctx_, d_, cx_ll_empty([]const u8)))), "\x02\x5b\x4b")); }; };
 }
 
-fn emit_zig_list_elems(elems: *CxList(IRExpr), i_: i64, ctx_: ZigCtx, d_: i64) []const u8 {
-    return (if ((i_ == cx_list_len(elems))) "" else (if ((i_ == (cx_list_len(elems) -% 1))) emit_zig_expr(cx_list_at(elems, i_), ctx_, (d_ +% 1)) else cx_concat(cx_concat(emit_zig_expr(cx_list_at(elems, i_), ctx_, (d_ +% 1)), "\x42\x02"), emit_zig_list_elems(elems, (i_ +% 1), ctx_, d_))));
+fn emit_zig_list_elems_loop(elems: *CxList(IRExpr), i_: i64, ctx_: ZigCtx, d_: i64, acc_: *CxList([]const u8)) *CxList([]const u8) {
+    var _tl_i = i_;
+    var _tl_acc = acc_;
+    while (true) {
+        if ((_tl_i == cx_list_len(elems))) { return _tl_acc; } else { const one = emit_zig_expr(cx_list_at(elems, _tl_i), ctx_, (d_ +% 1)); if ((_tl_i == (cx_list_len(elems) -% 1))) { return cx_ll_push(_tl_acc, one); } else { { const _tj3_1 = (_tl_i +% 1); const _tj3_4 = cx_ll_push(cx_ll_push(_tl_acc, one), "\x42\x02"); _tl_i = _tj3_1; _tl_acc = _tj3_4; continue; } } }
+    }
 }
 
 fn zig_field_value_text(recname: []const u8, fieldname: []const u8, v_: IRExpr, ctx_: ZigCtx, d_: i64, rty: CodexType) []const u8 {
@@ -18197,18 +18209,6 @@ fn emit_zig_def_params(params: *CxList(IRParam), i_: i64, ctx_: ZigCtx) []const 
     return (if ((i_ == cx_list_len(params))) "" else b1: { const p_ = cx_list_at(params, i_); break :b1 b2: { const one = cx_concat(cx_concat(zig_def_param_name(ctx_, p_.name), "\x45\x02"), emit_zig_type(p_.type_val, ctx_.scope_tvars)); break :b2 (if ((i_ == (cx_list_len(params) -% 1))) one else cx_concat(cx_concat(one, "\x42\x02"), emit_zig_def_params(params, (i_ +% 1), ctx_))); }; });
 }
 
-fn emit_zig_defs(defs: *CxList(IRDef), i_: i64, ctx_: ZigCtx) []const u8 {
-    return cx_text_concat_list(emit_zig_defs_loop(defs, i_, ctx_, cx_ll_empty([]const u8)));
-}
-
-fn emit_zig_defs_loop(defs: *CxList(IRDef), i_: i64, ctx_: ZigCtx, acc_: *CxList([]const u8)) *CxList([]const u8) {
-    var _tl_i = i_;
-    var _tl_acc = acc_;
-    while (true) {
-        if ((_tl_i == cx_list_len(defs))) { return _tl_acc; } else { { const _tj1_1 = (_tl_i +% 1); const _tj1_3 = cx_ll_push(_tl_acc, emit_zig_def(cx_list_at(defs, _tl_i), ctx_)); _tl_i = _tj1_1; _tl_acc = _tj1_3; continue; } }
-    }
-}
-
 fn zig_main(entry: []const u8, defs: *CxList(IRDef)) []const u8 {
     return cx_concat(cx_concat(cx_concat(cx_concat(cx_concat(cx_concat("\x1c\x12\x02\x18\x24\x55\x0d\x12\x0e\x15\x1e\x4a\x4b\x02\x21\x10\x11\x16\x02\x5a\x01", zig_entry_call(zig_sanitize(entry), zig_entry_return_type(defs, 0))), "\x5b\x01\x01"), "\x1f\x19\x20\x02\x1c\x12\x02\x1a\x0f\x11\x12\x4a\x4b\x02\x21\x10\x11\x16\x02\x5a\x01"), "\x02\x02\x02\x02\x18\x10\x12\x13\x0e\x02\x13\x0e\x0f\x18\x22\x55\x20\x1e\x0e\x0d\x13\x45\x02\x19\x13\x11\x26\x0d\x02\x4d\x02\x08\x04\x05\x02\x4e\x02\x04\x03\x05\x07\x02\x4e\x02\x04\x03\x05\x07\x46\x01"), "\x02\x02\x02\x02\x18\x10\x12\x13\x0e\x02\x0e\x02\x4d\x02\x13\x0e\x16\x41\x28\x14\x15\x0d\x0f\x16\x41\x13\x1f\x0f\x1b\x12\x4a\x41\x5a\x02\x41\x13\x0e\x0f\x18\x22\x55\x13\x11\x26\x0d\x02\x4d\x02\x13\x0e\x0f\x18\x22\x55\x20\x1e\x0e\x0d\x13\x02\x5b\x42\x02\x18\x24\x55\x0d\x12\x0e\x15\x1e\x42\x02\x41\x5a\x5b\x4b\x02\x18\x0f\x0e\x18\x14\x02\x52\x1f\x0f\x12\x11\x18\x4a\x48\x13\x1f\x0f\x1b\x12\x48\x4b\x46\x01"), "\x02\x02\x02\x02\x0e\x41\x23\x10\x11\x12\x4a\x4b\x46\x01\x5b\x01");
 }
@@ -18658,20 +18658,45 @@ fn zig_prelude_names_loop(ps: *CxList(ShakePart), i_: i64, acc_: *CxList([]const
     }
 }
 
-fn zig_prelude_roots(prog: []const u8) *CxList([]const u8) {
-    return zig_roots_loop(prog, zig_prelude_part_names(), 0, cx_ll_empty([]const u8));
+fn zig_prelude_split() i64 {
+    return 50;
 }
 
-fn zig_roots_loop(prog: []const u8, ns: *CxList([]const u8), i_: i64, acc_: *CxList([]const u8)) *CxList([]const u8) {
+fn zig_mask_loop(ns: *CxList([]const u8), prog: []const u8, i_: i64, hi: i64, base_: i64, acc_: i64) i64 {
     var _tl_i = i_;
     var _tl_acc = acc_;
     while (true) {
-        if ((_tl_i >= cx_list_len(ns))) { return _tl_acc; } else { const n_ = cx_list_at(ns, _tl_i); switch ((if ((cx_text_len(n_) == 0)) Maybe(i64){ .Just = 0 } else (if ((cx_text_len(n_) > cx_text_len(prog))) Maybe(i64){ .None = {} } else index_of_loop(prog, n_, 0, ((cx_text_len(prog) -% cx_text_len(n_)) +% 1))))) { .Just => { { const _tj3_2 = (_tl_i +% 1); const _tj3_3 = cx_ll_concat(_tl_acc, cx_ll_of([]const u8, &[_][]const u8{ n_ })); _tl_i = _tj3_2; _tl_acc = _tj3_3; continue; } }, .None => { { const _tj3_2 = (_tl_i +% 1); const _tj3_3 = _tl_acc; _tl_i = _tj3_2; _tl_acc = _tj3_3; continue; } },  } }
+        if ((_tl_i >= hi)) { return _tl_acc; } else { switch (index_of(prog, cx_list_at(ns, _tl_i))) { .Just => { { const _tj2_2 = (_tl_i +% 1); const _tj2_5 = (_tl_acc | cx_shl(1, (_tl_i -% base_))); _tl_i = _tj2_2; _tl_acc = _tj2_5; continue; } }, .None => { { const _tj2_2 = (_tl_i +% 1); const _tj2_5 = _tl_acc; _tl_i = _tj2_2; _tl_acc = _tj2_5; continue; } },  } }
     }
 }
 
-fn emit_zig_chapter(m_: IRChapter, type_defs: *CxList(ATypeDef)) []const u8 {
-    return b0: { const ctx_ = cx_new(ZigCtxS{ .arities = build_arity_map(m_.defs, 0, cx_ll_empty(ArityEntry)), .ctors = build_ctor_map(type_defs, 0, cx_ll_empty(ZigCtorEntry)), .typedefs = type_defs, .irdefs = m_.defs, .renamed_from = cx_ll_empty([]const u8), .renamed_to = cx_ll_empty([]const u8), .tvar_ids = cx_ll_empty(i64), .tvar_types = cx_ll_empty(CodexType), .expected = cx_new(CodexTypeS{ .VoidTy = {} }), .bound_names = cx_ll_empty([]const u8), .scope_tvars = cx_ll_empty(i64) }); break :b0 b1: { const types_text = cx_text_concat_list(emit_zig_type_defs_loop(type_defs, 0, cx_ll_empty([]const u8))); break :b1 b2: { const defs_text = emit_zig_defs(m_.defs, 0, ctx_); break :b2 b3: { const zig_prog = cx_concat(cx_concat(types_text, defs_text), zig_main(opening_entry_point(), m_.defs)); break :b3 cx_concat(cx_concat(zig_prog, zig_postlude_banner()), shake_text(zig_prelude_parts(), zig_prelude_roots(zig_prog))); }; }; }; };
+fn zig_mask_lo(ns: *CxList([]const u8), prog: []const u8) i64 {
+    return zig_mask_loop(ns, prog, 0, zig_prelude_split(), 0, 0);
+}
+
+fn zig_mask_hi(ns: *CxList([]const u8), prog: []const u8) i64 {
+    return zig_mask_loop(ns, prog, zig_prelude_split(), cx_list_len(ns), zig_prelude_split(), 0);
+}
+
+fn zig_roots_mask_loop(ns: *CxList([]const u8), m1: i64, m2: i64, i_: i64, acc_: *CxList([]const u8)) *CxList([]const u8) {
+    var _tl_i = i_;
+    var _tl_acc = acc_;
+    while (true) {
+        if ((_tl_i >= cx_list_len(ns))) { return _tl_acc; } else { const bit: i64 = (if ((_tl_i < zig_prelude_split())) (cx_shr(m1, _tl_i) & 1) else (cx_shr(m2, (_tl_i -% zig_prelude_split())) & 1)); { const _tj2_3 = (_tl_i +% 1); const _tj2_4 = (if ((bit == 1)) cx_ll_push(_tl_acc, cx_list_at(ns, _tl_i)) else _tl_acc); _tl_i = _tj2_3; _tl_acc = _tj2_4; continue; } }
+    }
+}
+
+fn emit_zig_chapter_stream(m_: IRChapter, type_defs: *CxList(ATypeDef)) void {
+    return b0: { const ctx_ = cx_new(ZigCtxS{ .arities = build_arity_map(m_.defs, 0, cx_ll_empty(ArityEntry)), .ctors = build_ctor_map(type_defs, 0, cx_ll_empty(ZigCtorEntry)), .typedefs = type_defs, .irdefs = m_.defs, .renamed_from = cx_ll_empty([]const u8), .renamed_to = cx_ll_empty([]const u8), .tvar_ids = cx_ll_empty(i64), .tvar_types = cx_ll_empty(CodexType), .expected = cx_new(CodexTypeS{ .VoidTy = {} }), .bound_names = cx_ll_empty([]const u8), .scope_tvars = cx_ll_empty(i64) }); break :b0 b1: { const ns = zig_prelude_part_names(); break :b1 b2: { const types_text = emit_zig_type_defs(type_defs, 0); break :b2 b3: { const main_text = zig_main(opening_entry_point(), m_.defs); break :b3 b4: { const m1: i64 = (zig_mask_lo(ns, types_text) | zig_mask_lo(ns, main_text)); break :b4 b5: { const m2: i64 = (zig_mask_hi(ns, types_text) | zig_mask_hi(ns, main_text)); break :b5 b6: { _ = cx_print(types_text); _ = zig_stream_defs(ctx_, m_.defs, 0, main_text, ns, m1, m2); break :b6; }; }; }; }; }; }; };
+}
+
+fn zig_stream_defs(ctx_: ZigCtx, defs: *CxList(IRDef), i_: i64, main_text: []const u8, ns: *CxList([]const u8), m1: i64, m2: i64) void {
+    var _tl_i = i_;
+    var _tl_m1 = m1;
+    var _tl_m2 = m2;
+    while (true) {
+        if ((_tl_i >= cx_list_len(defs))) { _ = cx_print(main_text); _ = cx_print(zig_postlude_banner()); return cx_print(shake_text(zig_prelude_parts(), zig_roots_mask_loop(ns, _tl_m1, _tl_m2, 0, cx_ll_empty([]const u8)))); } else { const h_: i64 = cx_heap_save(); const text = emit_zig_def(cx_list_at(defs, _tl_i), ctx_); const n1: i64 = (_tl_m1 | zig_mask_lo(ns, text)); const n2: i64 = (_tl_m2 | zig_mask_hi(ns, text)); _ = cx_print(text); _ = cx_heap_restore(h_); { const _tj7_2 = (_tl_i +% 1); const _tj7_5 = n1; const _tj7_6 = n2; _tl_i = _tj7_2; _tl_m1 = _tj7_5; _tl_m2 = _tj7_6; continue; } }
+    }
 }
 
 fn czg_halted(es: *CxList(Diagnostic)) []const u8 {
@@ -18683,7 +18708,7 @@ fn czg_emit_roots() *CxList([]const u8) {
 }
 
 fn opening() void {
-    return b0: { const src = cx_read_file_uni("\x51\x16\x0d\x21\x51\x13\x0e\x16\x11\x12"); _ = b1: { _ = init_phase_allocator(); break :b1 b2: { const deck_base: i64 = cx_heap_save(); break :b2 b3: { _ = cx_deck_set(deck_base); break :b3 b4: { _ = cx_heap_advance(536870912); break :b4 b5: { const toks = tokenize(src, 1); break :b5 b6: { const scan = scan_document(make_parse_state(toks.tokens, src)); break :b6 b7: { const assignments = build_all_assignments(src, scan.def_headers, 0, cx_ll_empty(ChapterAssignment)); break :b7 b8: { const colliding = find_collisions_loop(assignments, 0, cx_list_len(assignments), skip_list_text_empty(), cx_ll_empty([]const u8), cx_ll_empty([]const u8)); break :b8 b9: { const renames = build_global_rename_table(assignments, colliding); break :b9 b10: { const doc = parse_document(make_parse_state(toks.tokens, src), 0); break :b10 b11: { const dr = desugar_document(src, doc, doc.chapter_title, 0); break :b11 b12: { const ch0 = dr.dr_chapter; break :b12 b13: { const _v13_ch = scope_achapter(ch0, colliding, assignments, 0); break :b13 b14: { const rr = resolve_chapter_with_citations(_v13_ch, cx_ll_empty(ResolveResult), colliding, assignments, 0); break :b14 b15: { const cr = check_chapter(_v13_ch, renames, colliding, assignments, 0); break :b15 b16: { const resolved_et = map_list(ExprTypeEntry, ExprTypeEntry, b18: { const _Env18 = struct { a0: ChapterResult, fn call(_ctx18: *anyopaque, p0: ExprTypeEntry) ExprTypeEntry { const _e18: *@This() = @ptrCast(@alignCast(_ctx18)); return __lam_425(ExprTypeEntry, _e18.a0, p0); } }; break :b18 CxFn1(ExprTypeEntry, ExprTypeEntry){ .ctx = cx_new(_Env18{ .a0 = cr }), .call = &_Env18.call }; }, sort_expr_types(cr.state.expr_types)); break :b16 b17: { const cst = b18: { const _r18 = cr.state; _r18.expr_types = resolved_et; break :b18 _r18; }; break :b17 b18: { const resolved_env = map_list(TypeBinding, TypeBinding, b20: { const _Env20 = struct { a0: UnificationState, fn call(_ctx20: *anyopaque, p0: TypeBinding) TypeBinding { const _e20: *@This() = @ptrCast(@alignCast(_ctx20)); return __lam_426(TypeBinding, _e20.a0, p0); } }; break :b20 CxFn1(TypeBinding, TypeBinding){ .ctx = cx_new(_Env20{ .a0 = cst }), .call = &_Env20.call }; }, cr.env.bindings); break :b18 b19: { const bound = map_list(TypeBinding, TypeBinding, b21: { const _Env21 = struct { a0: UnificationState, fn call(_ctx21: *anyopaque, p0: TypeBinding) TypeBinding { const _e21: *@This() = @ptrCast(@alignCast(_ctx21)); return __lam_427(TypeBinding, _e21.a0, p0); } }; break :b21 CxFn1(TypeBinding, TypeBinding){ .ctx = cx_new(_Env21{ .a0 = cst }), .call = &_Env21.call }; }, sort_bindings(cx_ll_concat(cr.types, resolved_env))); break :b19 b20: { const ir_raw = lower_chapter(_v13_ch, bound, cst, rr.ctor_names, renames, colliding, assignments, 0); break :b20 b21: { const passed = run_ir_pipeline(default_ir_pipeline(), ir_raw, false); break :b21 b22: { const ir0 = passed.chapter; break :b22 b23: { const ir = lift_lambdas(ir0, 0); break :b23 b24: { const czg_bag = bag_merge_all(cx_ll_of(DiagnosticBag, &[_]DiagnosticBag{ bag_from_list(toks.errors), doc.parse_bag, rr.bag, cr.state.bag })); break :b24 (if ((czg_bag.error_count > 0)) cx_print(czg_halted(bag_errors_loop(czg_bag.diagnostics, cx_ll_empty(Diagnostic), 0, cx_list_len(czg_bag.diagnostics)))) else b26: { const meta = cx_new(IRTextMetaS{ .chapter_title = _v13_ch.chapter_title, .prose = _v13_ch.prose, .section_titles = _v13_ch.section_titles, .ctor_names = rr.ctor_names, .prose_blocks = _v13_ch.prose_blocks, .annotations = _v13_ch.annotations, .ground_effects = _v13_ch.ground_effects }); break :b26 b27: { const ir_text = emit_ir_chapter(ir_prune_unreachable_roots(ir, czg_emit_roots()), meta, _v13_ch.type_defs); break :b27 b28: { const parsed = parse_ir_chapter(ir_text); break :b28 cx_print(emit_zig_chapter(parsed.chapter, parsed.type_defs)); }; }; }); }; }; }; }; }; }; }; }; }; }; }; }; }; }; }; }; }; }; }; }; }; }; }; }; break :b0; };
+    return b0: { const src = cx_read_file_uni("\x51\x16\x0d\x21\x51\x13\x0e\x16\x11\x12"); _ = b1: { _ = init_phase_allocator(); break :b1 b2: { const deck_base: i64 = cx_heap_save(); break :b2 b3: { _ = cx_deck_set(deck_base); break :b3 b4: { _ = cx_heap_advance(536870912); break :b4 b5: { const toks = tokenize(src, 1); break :b5 b6: { const scan = scan_document(make_parse_state(toks.tokens, src)); break :b6 b7: { const assignments = build_all_assignments(src, scan.def_headers, 0, cx_ll_empty(ChapterAssignment)); break :b7 b8: { const colliding = find_collisions_loop(assignments, 0, cx_list_len(assignments), skip_list_text_empty(), cx_ll_empty([]const u8), cx_ll_empty([]const u8)); break :b8 b9: { const renames = build_global_rename_table(assignments, colliding); break :b9 b10: { const doc = parse_document(make_parse_state(toks.tokens, src), 0); break :b10 b11: { const dr = desugar_document(src, doc, doc.chapter_title, 0); break :b11 b12: { const ch0 = dr.dr_chapter; break :b12 b13: { const _v13_ch = scope_achapter(ch0, colliding, assignments, 0); break :b13 b14: { const rr = resolve_chapter_with_citations(_v13_ch, cx_ll_empty(ResolveResult), colliding, assignments, 0); break :b14 b15: { const cr = check_chapter(_v13_ch, renames, colliding, assignments, 0); break :b15 b16: { const resolved_et = map_list(ExprTypeEntry, ExprTypeEntry, b18: { const _Env18 = struct { a0: ChapterResult, fn call(_ctx18: *anyopaque, p0: ExprTypeEntry) ExprTypeEntry { const _e18: *@This() = @ptrCast(@alignCast(_ctx18)); return __lam_425(ExprTypeEntry, _e18.a0, p0); } }; break :b18 CxFn1(ExprTypeEntry, ExprTypeEntry){ .ctx = cx_new(_Env18{ .a0 = cr }), .call = &_Env18.call }; }, sort_expr_types(cr.state.expr_types)); break :b16 b17: { const cst = b18: { const _r18 = cr.state; _r18.expr_types = resolved_et; break :b18 _r18; }; break :b17 b18: { const resolved_env = map_list(TypeBinding, TypeBinding, b20: { const _Env20 = struct { a0: UnificationState, fn call(_ctx20: *anyopaque, p0: TypeBinding) TypeBinding { const _e20: *@This() = @ptrCast(@alignCast(_ctx20)); return __lam_426(TypeBinding, _e20.a0, p0); } }; break :b20 CxFn1(TypeBinding, TypeBinding){ .ctx = cx_new(_Env20{ .a0 = cst }), .call = &_Env20.call }; }, cr.env.bindings); break :b18 b19: { const bound = map_list(TypeBinding, TypeBinding, b21: { const _Env21 = struct { a0: UnificationState, fn call(_ctx21: *anyopaque, p0: TypeBinding) TypeBinding { const _e21: *@This() = @ptrCast(@alignCast(_ctx21)); return __lam_427(TypeBinding, _e21.a0, p0); } }; break :b21 CxFn1(TypeBinding, TypeBinding){ .ctx = cx_new(_Env21{ .a0 = cst }), .call = &_Env21.call }; }, sort_bindings(cx_ll_concat(cr.types, resolved_env))); break :b19 b20: { const ir_raw = lower_chapter(_v13_ch, bound, cst, rr.ctor_names, renames, colliding, assignments, 0); break :b20 b21: { const passed = run_ir_pipeline(default_ir_pipeline(), ir_raw, false); break :b21 b22: { const ir0 = passed.chapter; break :b22 b23: { const ir = lift_lambdas(ir0, 0); break :b23 b24: { const czg_bag = bag_merge_all(cx_ll_of(DiagnosticBag, &[_]DiagnosticBag{ bag_from_list(toks.errors), doc.parse_bag, rr.bag, cr.state.bag })); break :b24 (if ((czg_bag.error_count > 0)) cx_print(czg_halted(bag_errors_loop(czg_bag.diagnostics, cx_ll_empty(Diagnostic), 0, cx_list_len(czg_bag.diagnostics)))) else b26: { const meta = cx_new(IRTextMetaS{ .chapter_title = _v13_ch.chapter_title, .prose = _v13_ch.prose, .section_titles = _v13_ch.section_titles, .ctor_names = rr.ctor_names, .prose_blocks = _v13_ch.prose_blocks, .annotations = _v13_ch.annotations, .ground_effects = _v13_ch.ground_effects }); break :b26 b27: { const ir_text = emit_ir_chapter(ir_prune_unreachable_roots(ir, czg_emit_roots()), meta, _v13_ch.type_defs); break :b27 b28: { const parsed = parse_ir_chapter(ir_text); break :b28 emit_zig_chapter_stream(parsed.chapter, parsed.type_defs); }; }; }); }; }; }; }; }; }; }; }; }; }; }; }; }; }; }; }; }; }; }; }; }; }; }; }; break :b0; };
 }
 
 fn __lam_0(s_: CodegenState, a_: *CxList(IRExpr)) EmitResult {

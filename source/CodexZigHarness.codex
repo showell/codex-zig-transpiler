@@ -93,5 +93,5 @@ Section: Driver
     }
     in let ir-text = emit-ir-chapter (ir-prune-unreachable-roots ir czg-emit-roots) meta (ch.type-defs)
     in let parsed = parse-ir-chapter ir-text
-    in print-text (emit-zig-chapter (parsed.chapter) (parsed.type-defs))
+    in emit-zig-chapter-stream (parsed.chapter) (parsed.type-defs)
   end
