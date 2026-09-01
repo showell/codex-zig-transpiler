@@ -62202,8 +62202,7 @@ Section: Halt
   czg-halted (es) =
    let n = list-length es
    in let e0 = list-at es 0
-   in "CODEGEN-HALTED: " & show n & " error(s); no zig emitted; first CDX" & show (e0.code) & " " & (e0.message) & "
-"
+   in "CODEGEN-HALTED: " & show n & " error(s); no zig emitted; first CDX" & show (e0.code) & " " & (e0.message) & "\n"
 
 Section: Roots
 

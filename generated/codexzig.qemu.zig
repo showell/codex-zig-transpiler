@@ -18700,7 +18700,7 @@ fn zig_stream_defs(ctx_: ZigCtx, defs: *CxList(IRDef), i_: i64, main_text: []con
 }
 
 fn czg_halted(es: *CxList(Diagnostic)) []const u8 {
-    return b0: { const n_: i64 = cx_list_len(es); break :b0 b1: { const e0 = cx_list_at(es, 0); break :b1 cx_concat(cx_concat(cx_concat(cx_concat(cx_concat(cx_concat("\x32\x2a\x30\x27\x37\x27\x2c\x49\x2e\x29\x31\x28\x27\x30\x45\x02", cx_show_int(n_)), "\x02\x0d\x15\x15\x10\x15\x4a\x13\x4b\x46\x02\x12\x10\x02\x26\x11\x1d\x02\x0d\x1a\x11\x0e\x0e\x0d\x16\x46\x02\x1c\x11\x15\x13\x0e\x02\x32\x30\x3e"), cx_show_int(e0.code_)), "\x02"), e0.message), ""); }; };
+    return b0: { const n_: i64 = cx_list_len(es); break :b0 b1: { const e0 = cx_list_at(es, 0); break :b1 cx_concat(cx_concat(cx_concat(cx_concat(cx_concat(cx_concat("\x32\x2a\x30\x27\x37\x27\x2c\x49\x2e\x29\x31\x28\x27\x30\x45\x02", cx_show_int(n_)), "\x02\x0d\x15\x15\x10\x15\x4a\x13\x4b\x46\x02\x12\x10\x02\x26\x11\x1d\x02\x0d\x1a\x11\x0e\x0e\x0d\x16\x46\x02\x1c\x11\x15\x13\x0e\x02\x32\x30\x3e"), cx_show_int(e0.code_)), "\x02"), e0.message), "\x01"); }; };
 }
 
 fn czg_emit_roots() *CxList([]const u8) {
