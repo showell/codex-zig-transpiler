@@ -27,8 +27,7 @@ Section: Halt
   czg-halted (es) =
    let n = list-length es
    in let e0 = list-at es 0
-   in "CODEGEN-HALTED: " & show n & " error(s); no zig emitted; first CDX" & show (e0.code) & " " & (e0.message) & "
-"
+   in "CODEGEN-HALTED: " & show n & " error(s); no zig emitted; first CDX" & show (e0.code) & " " & (e0.message) & "\n"
 
  THE NON-ERROR DIAGNOSTICS GO TO STDOUT, and until 2026-08-30 they went
  nowhere. This harness merged the driver's four bags and then asked one
