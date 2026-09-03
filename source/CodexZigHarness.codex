@@ -106,10 +106,45 @@ Section: Driver
  below, and the emitted zig fails loud when that is exceeded: cx_bump_alloc
  panics with "the two cursors met".
 
- LOWER-CHAPTER'S SIGNATURE IS THIS REPOSITORY'S REAL PIN ON THE COMPILER, and
- it has moved three Updates running: EIGHT parameters through Update 53, NINE at
- Update 54 (`rename`), and at Update 55 ELEVEN with a tuple return -- the two new
- ones are a KEEP, the region lowering writes surviving definitions into.
+ THE PHASE SIGNATURES ARE THIS REPOSITORY'S REAL PIN ON THE COMPILER, and two
+ of them have moved. `lower-chapter` moved three Updates running: EIGHT
+ parameters through Update 53, NINE at Update 54 (`rename`), and at Update 55
+ ELEVEN with a tuple return -- the two new ones are a KEEP, the region lowering
+ writes surviving definitions into. `check-chapter` moved once, from FIVE to
+ NINE at Update 54, and THAT ONE WENT UNNOTICED FOR TWO UPDATES.
+
+ It went unnoticed because nothing here could see it. The call kept compiling,
+ kept emitting, and produced a `cr` that was a four-argument FUNCTION; the
+ `cr.state` on the next line is field access on that function. It surfaced as
+ the T38 refusal -- `zig plug: unresolved type variable T38 of __lam_443` --
+ which reads as an emitter limitation and is not one: `__lam_443` is the closure
+ the emitter must synthesise for a call four arguments short, and it cannot type
+ it because nothing says what the missing arguments are. Found 2026-09-03 by
+ `xref arity`, which grades every call here against the checkout's parameter
+ lists in seconds. Run it before believing this file.
+
+ CHECK CANNOT BE CALLED BARE, which is the second half of the same fix and is
+ not about arity at all. `check-chapter` issues a `__deck-exit` immediately
+ before its per-definition walk and a `__deck-enter` after, so the walk runs
+ OUTSIDE the phase extent where `deck-short-of` reads a live cell -- it is the
+ only function in the compiler outside the emitter that issues either builtin by
+ hand, and `BuildSettings.codex` states the requirement in as many words. The
+ extent it exits is the CALLER'S, and the driver supplies one:
+ `opening.codex:635` writes `deck-record (check-chapter ...)`. Called bare the
+ nesting counter goes to -1 instead of 0, and at -1 every `deck-record` inside
+ the walk is a no-op, so per-definition results land on the bivy while the batch
+ machinery reclaims as though they had not. The phase still looks green; what
+ breaks is whoever reads its result later.
+
+ THE FOUR DECK ARGUMENTS ARE THE DRIVER'S OWN, copied rather than invented, from
+ `compile-type-check`. The 4 MiB subtrahend in the keep ceiling is theirs too.
+ The driver scales both floors through `scaled-floor (flags.deck-scale) ...`,
+ which lives in opening.codex and cannot be cited from a harness that IS the
+ opening; at the default scale of 100 `scaled-floor` returns the floor itself,
+ so the constants are used directly. `poison` is 0: the driver passes
+ `poison-check` only under `flags.poison-compact`, a debugging aid that is off.
+ The reservations cost 704 MB and 96 MB of a 4 GiB region that is lazily
+ faulted, so nothing is resident until it is touched.
 
  NONE of those read as an arity error. Codex curries, so an under-applied call is
  a FUNCTION VALUE and the failure lands one line later against whatever consumes
@@ -153,7 +188,12 @@ Section: Driver
     in let ch0 = dr.dr-chapter
     in let ch = scope-achapter ch0 colliding assignments 0
     in let rr = resolve-chapter ch colliding assignments 0
-    in let cr = check-chapter ch renames colliding assignments 0
+    in let keep-height = demand-check-keep-floor
+    in let keep-base = build keep-height
+    in let check-height = demand-check-floor
+    in let check-base = build check-height
+    in let check-ceiling = check-base + check-height
+    in let cr = deck-record (check-chapter ch renames colliding assignments check-ceiling check-base keep-base (keep-base + keep-height - 4194304) 0)
     in let resolved-et = for e in (sort-expr-types ((cr.state).expr-types)) -> ExprTypeEntry { key = e.key, ty = deep-resolve (cr.state) (e.ty) }
     in let cst = __record-set (cr.state) "expr-types" resolved-et
     in let resolved-env = for b in ((cr.env).bindings) -> TypeBinding { name = b.name, bound-type = deep-resolve cst (b.bound-type) }
