@@ -32,6 +32,8 @@ foreach ($decl in @('codex/compiler/Core/Name.codex',
 Add-PlugChapter -Lines $lines -Path (Join-Path $repo 'codex/plugs/common/PlugTypes.codex') -Quire 'Zig'
 Add-PlugChapter -Lines $lines -Path (Join-Path $repo 'codex/plugs/common/IRTextParser.codex') -Quire 'Zig'
 Add-PlugChapter -Lines $lines -Path (Join-Path $repo 'codex/plugs/zig/ZigEmitter.codex') -Quire 'Zig'
+Add-PlugChapter -Lines $lines -Path (Join-Path $repo 'codex/plugs/zig/ZigEmitterExpressions.codex') -Quire 'Zig'
+Add-PlugChapter -Lines $lines -Path (Join-Path $repo 'codex/plugs/zig/ZigEmitterApply.codex') -Quire 'Zig'
 Add-PlugChapter -Lines $lines -Path (Join-Path $repo 'codex/plugs/zig/ZigPrelude.codex') -Quire 'Zig'
 Add-PlugChapter -Lines $lines -Path (Join-Path $here 'ZigPlugRing.codex') -Quire 'Zig'
 

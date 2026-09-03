@@ -125,6 +125,8 @@ foreach ($ch in @('codex/compiler/Core/OffsetTable.codex',
                   'codex/compiler/Emit/CodexEmitter.codex',
                   'codex/plugs/common/IRTextParser.codex',
                   'codex/plugs/zig/ZigEmitter.codex',
+                  'codex/plugs/zig/ZigEmitterExpressions.codex',
+                  'codex/plugs/zig/ZigEmitterApply.codex',
                   'codex/plugs/zig/ZigPrelude.codex')) {
     Add-PlugChapter -Lines $lines -Path (Join-Path $repo $ch) -Quire 'Parsmi'
 }
