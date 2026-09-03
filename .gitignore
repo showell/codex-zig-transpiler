@@ -1,2 +1,7 @@
 __pycache__/
 /generated/local/
+
+# U55 writes a .sources digest beside every bundle. Ours digests the EMPTY
+# set: Get-PlugSourceDigest globs *.codex in the plug dir, and the ladder
+# assembles a synthetic plug whose dir holds none. Nothing here reads it.
+/generated/*.sources

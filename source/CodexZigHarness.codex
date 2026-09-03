@@ -106,6 +106,37 @@ Section: Driver
  below, and the emitted zig fails loud when that is exceeded: cx_bump_alloc
  panics with "the two cursors met".
 
+ LOWER-CHAPTER'S SIGNATURE IS THIS REPOSITORY'S REAL PIN ON THE COMPILER, and
+ it has moved three Updates running: EIGHT parameters through Update 53, NINE at
+ Update 54 (`rename`), and at Update 55 ELEVEN with a tuple return -- the two new
+ ones are a KEEP, the region lowering writes surviving definitions into.
+
+ NONE of those read as an arity error. Codex curries, so an under-applied call is
+ a FUNCTION VALUE and the failure lands one line later against whatever consumes
+ the result: `CDX2001: Type mismatch: Rec:IRChapter vs Fun` at `run-ir-pipeline`,
+ naming neither this call nor the argument it wants. When a new Update fails that
+ way, count the parameters here first.
+
+ `rename` is True because the two driver paths this harness models both pass True:
+ the flag is off only for the TEXT round-trip, which compares stage1 text to the
+ source definition by definition and reads a re-spelled `__seq_1` as a different
+ body. This lowers to IR and emits zig.
+
+ THE CEILING STAYS 0 and the KEEP DOES NOT. The prose above says why any non-zero
+ ceiling stops the lift here; the keep is a different argument, a real reservation
+ that `lower-chapter` sets the deck to itself, and passing zero for it would stop
+ the lift on the first definition for a different reason.
+
+ IT DOES NOT CITE THE DRIVER, and that is deliberate. Update 55 made
+ `Chapter: Opening` bundlable and the ladder's own zigc harness now calls it --
+ but a subject that carries the driver reaches `opening.codex`'s serial and
+ device code and the x86-64 code generator, and THIS subject goes through the zig
+ plug's emitter, which then has to emit `port-out-byte`, `poke-16` and
+ `__self-type-defs` for paths a hosted transpiler never runs. Measured
+ 2026-09-03: citing the driver took the plug's refusal set from four builtin
+ kinds to seven. The harness copy costs a signature chase per Update; the driver
+ costs plug surface. Here the second is worse.
+
   opening : [Console, FileSystem] Nothing = act
     src <- read-file-uni "/dev/stdin"
     let mountain-base = init-phase-allocator
@@ -127,7 +158,9 @@ Section: Driver
     in let cst = __record-set (cr.state) "expr-types" resolved-et
     in let resolved-env = for b in ((cr.env).bindings) -> TypeBinding { name = b.name, bound-type = deep-resolve cst (b.bound-type) }
     in let bound = for b in (sort-bindings (cr.types & resolved-env)) -> TypeBinding { name = b.name, bound-type = deep-resolve cst (b.bound-type) }
-    in let ir-raw = lower-chapter ch bound cst (rr.ctor-names) renames colliding assignments 0
+    in let lower-keep-height = demand-lower-keep-floor
+    in let lower-keep-base = build lower-keep-height
+    in let (ir-raw, lower-keep-end) = lower-chapter ch bound cst (rr.ctor-names) renames colliding assignments 0 True lower-keep-base (lower-keep-base + lower-keep-height)
     in let passed = run-ir-pipeline default-ir-pipeline ir-raw False
     in let ir0 = passed.chapter
     in let ir = lift-lambdas ir0 0
