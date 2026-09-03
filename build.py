@@ -433,6 +433,17 @@ def main():
     held = fixed_point()
     ran = run_sample()
 
+    # THE SUBJECT AND THE ARTIFACT BY CONTENT, not by size. A byte count does
+    # not identify a file, and the fixed point cannot supply the difference --
+    # it holds just as well against the wrong source. codex-wasm-transpiler's
+    # PROVENANCE has recorded sha256 from the start and this one did not, which
+    # is the gap that let a build be described by a checkout sha alone.
+    digests = ['', 'what was built, by content:', '']
+    for f in (SUBJECT, QEMU_ZIG, NATIVE_ZIG):
+        if f.is_file():
+            digests.append(f'  {f.name:<32} {f.stat().st_size:>9} bytes')
+            digests.append(f'  {"":<32} sha256 {sha(f)}')
+
     intake = ['', 'what each guest was actually handed (intake/):', '']
     for blob in (RINGPLUG_BLOB, SUBJECT_BLOB, IR_BLOB):
         mode = blob.read_bytes().split(b'\n', 1)[0].decode()
@@ -447,7 +458,7 @@ def main():
     (GEN / 'PROVENANCE').write_text(
         'Everything beside this file is emitted by build.py. Nothing here is\n'
         'source; edit source/ and rebuild.\n\n'
-        + '\n'.join(provenance + intake)
+        + '\n'.join(provenance + digests + intake)
         + f'\n\nfixed point  {"HOLDS" if held else "BROKEN"}\n'
         + f'{SAMPLE.name:<12} {"MATCHES" if ran else "DIFFERS"} '
         f'{SAMPLE_EXPECTED.name}\n'

@@ -123,6 +123,24 @@ foreach ($ch in @('codex/compiler/Core/OffsetTable.codex',
                   'codex/compiler/IR/Passes.codex',
                   'codex/compiler/IR/LirTargets.codex',
                   'codex/compiler/Emit/CodexEmitter.codex',
+                  # THE DRIVER, and the six foreword chapters it cites that
+                  # nothing else here pulls in. Update 55 split the entry point
+                  # out -- opening.codex defines `codex-opening`, EntryPoint.codex
+                  # holds `opening` -- so Chapter: Opening is bundlable by a
+                  # subject with its own entry point, and CodexZigHarness CALLS
+                  # `compile-frontend-cdx` instead of reimplementing it. That
+                  # copy is what broke at U54 and again at U55: `lower-chapter`
+                  # took 8 parameters, then 9, then 11 and a tuple, and an
+                  # under-applied call in Codex is a VALUE, so it surfaced as
+                  # `Rec:IRChapter vs Fun` against run-ir-pipeline rather than
+                  # as an arity error.
+                  'codex/foreword/core/Maybe.codex',
+                  'codex/foreword/core/Wrap64.codex',
+                  'codex/foreword/core/CCE.codex',
+                  'codex/foreword/core/Fat16.codex',
+                  'codex/foreword/core/ImportGate.codex',
+                  'codex/foreword/core/FactDisk.codex',
+                  'codex/compiler/opening.codex',
                   'codex/plugs/common/IRTextParser.codex',
                   'codex/plugs/zig/ZigEmitter.codex')) {
     Add-PlugChapter -Lines $lines -Path (Join-Path $repo $ch) -Quire 'Parsmi'
