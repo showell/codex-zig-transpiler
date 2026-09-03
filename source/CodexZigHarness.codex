@@ -106,6 +106,24 @@ Section: Driver
  below, and the emitted zig fails loud when that is exceeded: cx_bump_alloc
  panics with "the two cursors met".
 
+ THE TRAILING `True` ON lower-chapter IS THE BINDER RENAME, and it arrived in
+ Update 54. A shadowing local is re-spelled `n_1` for targets that scope a
+ definition flat, and zig is exactly such a target -- it refuses a local that
+ shadows a container-level declaration. Upstream switches it off for ONE thing,
+ the text round-trip, which compares stage1 text to the source definition by
+ definition and reads `__seq_1` as a different body. This harness is not that:
+ it lowers to IR and emits zig, which is upstream's `compile-frontend-cdx`
+ case, and that passes `True`.
+
+ THIS CALL IS THE REPOSITORY'S REAL PIN ON THE COMPILER, and it was implicit
+ until it broke. `lower-chapter` took EIGHT arguments through Update 53, NINE
+ in Update 54, and in Update 55 it takes eleven and answers a tuple. An
+ under-applied call is not an arity error here: the result is a function value,
+ and the failure surfaces one line later as
+ `CDX2001: Type mismatch: Rec:IRChapter vs Fun` against `run-ir-pipeline`,
+ which names neither this call nor the argument it wants. When a new Update
+ fails that way, count the parameters here first.
+
   opening : [Console, FileSystem] Nothing = act
     src <- read-file-uni "/dev/stdin"
     let mountain-base = init-phase-allocator
@@ -127,7 +145,7 @@ Section: Driver
     in let cst = __record-set (cr.state) "expr-types" resolved-et
     in let resolved-env = for b in ((cr.env).bindings) -> TypeBinding { name = b.name, bound-type = deep-resolve cst (b.bound-type) }
     in let bound = for b in (sort-bindings (cr.types & resolved-env)) -> TypeBinding { name = b.name, bound-type = deep-resolve cst (b.bound-type) }
-    in let ir-raw = lower-chapter ch bound cst (rr.ctor-names) renames colliding assignments 0
+    in let ir-raw = lower-chapter ch bound cst (rr.ctor-names) renames colliding assignments 0 True
     in let passed = run-ir-pipeline default-ir-pipeline ir-raw False
     in let ir0 = passed.chapter
     in let ir = lift-lambdas ir0 0
