@@ -123,9 +123,17 @@ foreach ($ch in @('codex/compiler/Core/OffsetTable.codex',
                   'codex/compiler/IR/Passes.codex',
                   'codex/compiler/IR/LirTargets.codex',
                   'codex/compiler/Emit/CodexEmitter.codex',
-                  'codex/plugs/common/IRTextParser.codex',
-                  'codex/plugs/zig/ZigEmitter.codex')) {
+                  'codex/plugs/common/IRTextParser.codex')) {
     Add-PlugChapter -Lines $lines -Path (Join-Path $repo $ch) -Quire 'Parsmi'
+}
+
+# EVERY PAGE OF Chapter: Zig Emitter, listed rather than discovered, from
+# source/zig_plug_pages.txt. This was one entry in the list above when the
+# emitter was one file; it is four files now, and a bundle short three of them
+# comes back from the seed as 17 x CDX3002 Undefined name: emit-zig-expr.
+foreach ($zp in (Get-Content (Join-Path $PSScriptRoot 'zig_plug_pages.txt') |
+                 Where-Object { $_.Trim() -and -not $_.Trim().StartsWith('#') })) {
+    Add-PlugChapter -Lines $lines -Path (Join-Path $repo "codex/plugs/zig/$($zp.Trim()).codex") -Quire 'Parsmi'
 }
 
 # Update 42 gave PhaseAllocator a cite of Codex chapter BootPaint, and a cite
