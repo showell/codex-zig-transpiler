@@ -1,9 +1,9 @@
-# SENT as PR 129 — wgsl plug: 81 of 81 pass naga
+# SENT as PR 129 — wgsl plug: all three causes, 81 of 81 pass naga
 
 https://github.com/damiant3/Cobblestone/pull/129
 
-Branch `wgsl-firefox-naga` off `675a0775` (Update 55), two commits, no
-stack. Backlog row `Ladder: wgsl-firefox-naga`.
+Branch `wgsl-firefox-naga` off `675a0775` (Update 55), THREE commits.
+Backlog row `Ladder: wgsl-firefox-naga`.
 
 ---
 
@@ -53,11 +53,33 @@ with more than one kernel's buffers.** A helper reached from two kernels
 would need one emission per kernel; there are none, and a second would be
 worth a refusal rather than a silently wrong name.
 
-## Cause 3
+## Cause 3 — a bitcast is not a constant expression
 
-Not fixed here, and no longer observed: naga 30 accepts the
-`bitcast<f32>(...)` constant expressions that were the fourth failure class,
-so nothing in the current population fails for it.
+A Real top-level constant emits a module-scope `const`, whose initialiser must
+be a constant expression:
+
+```
+const pb_rad : f32 = bitcast<f32>(1057300152u);
+error: Not implemented as constant expression: bitcast built-in function
+```
+
+naga does not implement `bitcast` there and Tint does, so Chrome accepted all
+of these and Firefox refused four kernels outright. `0x1.0a3d70p-1f` IS the
+f32 whose bits are 1057300152, written out — exact by construction, no
+rounding, and it needs only the integer arithmetic already in the chapter.
+The `f` suffix pins the type rather than leaning on AbstractFloat conversion.
+Verified over 428,984 sampled f32 bit patterns, every one round-tripping
+exactly; denormals, negative zero and `p+0` were each checked against naga
+directly. An f64 too large for f32 now REFUSES rather than emitting a finite
+stand-in, because a wrong number in a shader that compiles is worse.
+
+30 of the 42 regenerated shaders carry hex float literals as a result.
+
+## Reproducibility
+
+The committed shaders are what this emitter produces. Built at this base and
+regenerated, `SsaoKernel`, `PbrKernel` and `ReflectKernel` come out
+byte-identical to the files in the diff.
 
 ## Also here
 
