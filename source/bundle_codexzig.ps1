@@ -123,7 +123,19 @@ foreach ($ch in @('codex/compiler/Core/OffsetTable.codex',
                   'codex/compiler/IR/Passes.codex',
                   'codex/compiler/IR/LirTargets.codex',
                   'codex/compiler/Emit/CodexEmitter.codex',
-                  'codex/plugs/common/IRTextParser.codex')) {
+                  'codex/plugs/common/IRTextParser.codex',
+                  # THE DRIVER, not a copy of it. The harness calls
+                  # compile-frontend-cdx, so the subject carries Chapter:
+                  # Opening and the foreword chapters it cites. CCE is not
+                  # listed for the reason stated at the top of this file --
+                  # plug-build-lib carries a cited foreword chapter already,
+                  # and listing it as well puts it in twice.
+                  'codex/foreword/core/Maybe.codex',
+                  'codex/foreword/core/Wrap64.codex',
+                  'codex/foreword/core/Fat16.codex',
+                  'codex/foreword/core/ImportGate.codex',
+                  'codex/foreword/core/FactDisk.codex',
+                  'codex/compiler/opening.codex')) {
     Add-PlugChapter -Lines $lines -Path (Join-Path $repo $ch) -Quire 'Parsmi'
 }
 
