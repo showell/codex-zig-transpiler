@@ -1,9 +1,9 @@
 Everything beside this file is emitted by build.py. Nothing here is
 source; edit source/ and rebuild.
 
-checkout   /home/steve/showell_repos/cobblestone-realbits
-           2f7e7375  zig plug: emit real-to-bits and bits-to-real, the f64 bitcasts
-seed       Codex.cdx  3064878 bytes
+checkout   /home/steve/showell_repos/u56-candidate-friday
+           5efb7799 +dirty  PROVISIONAL: mcopy-type reads a tag with variant-tag, not peek-qword
+seed       Codex.cdx  3179934 bytes
 zig        0.16.0
 qemu       QEMU emulator version 8.2.2 (Debian 1:8.2.2+ds-0ubuntu1.18)
 pwsh       PowerShell 7.5.4
@@ -11,15 +11,16 @@ guest      accel=tcg  mem=3072MB
 
 what each guest was actually handed (intake/):
 
-  ringplug-source.codex.blob          370608 bytes   mode 'CDX map'
-  codexzig-subject.codex.blob        2978434 bytes   mode 'IR-CCE decks=172'
-  codexzig.ir.blob                  10129195 bytes   mode 'RING zig'
+  ringplug-source.codex.blob          391845 bytes   mode 'CDX map'
+  codexzig-subject.codex.blob        3446171 bytes   mode 'IR-CCE decks=172'
+  codexzig.ir.blob                  12029996 bytes   mode 'RING zig'
 
 what each guest touched of its cap:
 
-  codexzig.ir                       2466 MB of 3072 MB
-  codexzig.qemu.zig.cce             1053 MB of 3072 MB
+  ringplug.cdx                       401 MB of 3072 MB
+  codexzig.ir                        711 MB of 3072 MB
+  codexzig.qemu.zig.cce             1284 MB of 3072 MB
 
 fixed point  HOLDS
 arith.codex  MATCHES arith.expected
-built in     445s
+built in     532s
