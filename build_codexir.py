@@ -102,9 +102,22 @@ def transpile():
                        capture_output=True)
     IR_ZIG.write_bytes(r.stderr)
     diag = r.stdout.decode('utf-8', 'replace')
+    # **CDX3005 IS NOT NOISE, AND FILTERING IT COST AN AFTERNOON.** It says a
+    # definition shadows a builtin, and its own text says why that matters:
+    # "a shadow that computes the same result more slowly is the failure mode
+    # that has actually cost time here". Suppressed, it hid that this bundle
+    # defines its own `text-contains` -- so a guard added to the hottest
+    # comparison in cite resolution, believing it called a native builtin,
+    # called a Codex substring search instead and made a self-compile
+    # dramatically slower. Counted rather than dropped: eight lines of the same
+    # shape are noise, and the NUMBER changing is not.
+    shadows = [l for l in diag.strip().splitlines() if 'CDX3005' in l]
     for line in diag.strip().splitlines():
-        if 'CDX3005' not in line:          # the builtin-shadow warnings, all 8
+        if 'CDX3005' not in line:
             say('  | ' + line[:110])
+    if shadows:
+        names = sorted({l.split("'")[1] for l in shadows if "'" in l})
+        say(f'  | {len(shadows)} builtin shadows (CDX3005): ' + ' '.join(names))
     zig = IR_ZIG.read_text(errors='replace')
     for line in zig.splitlines():
         if line.startswith('CODEGEN-HALTED:'):
