@@ -9,8 +9,12 @@
 #
 # check_zig_pages.py cross-checks this list against the plug directory, so a
 # page upstream adds or renames fails BEFORE a bundle is built rather than as a
-# pile of undefined names inside one.
+# pile of undefined names inside one. THAT SCRIPT LIVES IN THE RETIRED LADDER
+# and is not available here, so this list is currently unguarded: a mismatch
+# surfaces as the bundler failing to read a file it was told to expect.
+#
+# ONE PAGE AGAIN. The four-page split is ours and is NOT upstream, and the
+# candidate branch is deliberately U55 + what we intend to send, so the
+# emitter it carries is upstream's single file. Restore the four names to
+# build a checkout that has the split.
 ZigEmitter
-ZigEmitterExpressions
-ZigEmitterApply
-ZigPrelude
