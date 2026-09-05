@@ -1,0 +1,114 @@
+Chapter: Parsmi--CodexIrHarness
+
+ The compiler as a program that emits IR: `codexir < prog.codex 2> prog.ir`.
+
+ CodexZigHarness beside this one is the same compiler with the zig emitter
+ behind it. This one stops at the wire. What that buys is an oracle at THIS
+ CHECKOUT'S PIN: the IR bank under `$CODEX_GOLDS/ir` was cut by bare metal at
+ an older Update, so a disagreement with it cannot be attributed without a
+ second arm compiled from the same source. This is that arm.
+
+ IT IS BUILT WITHOUT A GUEST, which is the whole reason it is cheap. The
+ ladder built its codexir through the seed -- bundle, compile to IR on bare
+ metal, push that through the ring plug, build the emitted zig -- because the
+ seed emits x86 and there was no other way to a first zig. `codexzig` exists
+ now and is a verified fixed point, so the chain is three host steps: swap the
+ harness, transpile, `zig build-exe`. Two minutes, no QEMU.
+
+Section: Halt
+
+ The same gate CodexZigHarness carries, for the same reason and in the same
+ words. The driver does not emit when the bag has errors, and a tool that
+ emitted anyway once had us report a compiler soundness hole to Damian's lane
+ that was this harness being deaf: `native/codexzig`, the same compiler from
+ the same plug whose harness DID read the bag, refused the same program with
+ the same code. CODEGEN-HALTED is the marker a reader refuses on by name.
+
+  cir-halted : List Diagnostic -> Text
+  cir-halted (es) =
+   let n = list-length es
+   in let e0 = list-at es 0
+   in "CODEGEN-HALTED: " & show n & " error(s); no IR emitted; first CDX" & show (e0.code) & " " & (e0.message) & "\n"
+
+ THE NON-ERROR DIAGNOSTICS GO TO STDOUT and the IR goes to stderr, because
+ `print-text` is `std.debug.print`, which is stderr -- and stderr is where this
+ tool's output goes. A warning printed the ordinary way would land inside the
+ IR. `write-binary` is the only route to fd 1 from Codex and it takes raw
+ bytes. Infos are counted, not printed: fifteen units once carried 3,685
+ CDX4010 `bounds proven` infos against ten warnings worth reading.
+
+  cir-sev-word : Integer -> Text
+  cir-sev-word (s) = if s == sev-warning then "warning" else "notice"
+
+  cir-notice-line : Diagnostic -> Text
+  cir-notice-line (d) = "CDX" & show (d.code) & " " & cir-sev-word (d.severity) & ": " & (d.message)
+
+  cir-line-bytes : Text -> List Integer
+  cir-line-bytes (t) = list-push (text-to-utf8-bytes t) 10
+
+  cir-notices : List Diagnostic, Integer, List Integer -> List Integer
+  cir-notices (ds) (i) (acc) =
+   if i >= list-length ds then acc
+   else let d = list-at ds i
+   in if (d.severity) == sev-info then cir-notices ds (i + 1) acc
+   else cir-notices ds (i + 1) (acc & cir-line-bytes (cir-notice-line d))
+
+  cir-info-count : List Diagnostic, Integer, Integer -> Integer
+  cir-info-count (ds) (i) (n) =
+   if i >= list-length ds then n
+   else let d = list-at ds i
+   in if (d.severity) == sev-info then cir-info-count ds (i + 1) (n + 1)
+   else cir-info-count ds (i + 1) n
+
+  cir-report : DiagnosticBag -> List Integer
+  cir-report (b) =
+   let ds = bag-diagnostics b
+   in let body = cir-notices ds 0 []
+   in let n = cir-info-count ds 0 0
+   in if n == 0 then body
+   else body & cir-line-bytes ("codexir: " & show n & " info diagnostics not shown")
+
+Section: Roots
+
+ opening.codex's own list, copied because that chapter cannot ride beside a
+ harness that defines `opening`. A copy that drifts prunes a root and loses it
+ from the IR silently: this list carried four names instead of six for weeks,
+ and CodexZigHarness had the SAME truncation, so the two arms agreed with each
+ other and neither could see it. An oracle cannot find a mistake both of its
+ arms make.
+
+  cir-emit-roots : List Text
+  cir-emit-roots = ["opening", "vb-capacity-auto", "vb-read-auto", "vb-write-auto", "fat16-servicer-read", "fat16-servicer-write"]
+
+Section: Driver
+
+ THIS IS `emit-ir-uni`, the driver's own IR mode, and not a re-derivation of
+ its phases: `compile-frontend-ir`, then `lift-ir-for-emit`, then the prune.
+
+ `compile-frontend-ir` AND NOT `compile-frontend-cdx`, which is the one choice
+ here that decides what the IR CONTAINS. The `-cdx` sequence runs a RESOLVE
+ phase the `-ir` sequence does not, and running it rewrites every let binding
+ whose nullary ConstructedTy names a record into a RecordTy the driver leaves
+ as `ctd` -- 930 lines of difference on the ir_to_x86 subject, and an IR wire
+ the oracle path never emits. CodexZigHarness calls `-cdx` deliberately,
+ because it is feeding an emitter and not a bank.
+
+ THE CHAPTER NAME IS "Program", which is the driver's own literal and is
+ measured rather than assumed: bare metal's IR for this repository's own
+ subject opens `(chapter "Program")`. The ladder's bank names the entry
+ chapter instead, and that is the LADDER'S harness, not the compiler.
+
+  opening : [Console, FileSystem] Nothing = act
+    src <- read-file-uni "/dev/stdin"
+    let mountain-base = init-phase-allocator
+    in let deck-base = __heap-save
+    in let deck-set = __deck-set deck-base
+    in let deck-adv = __heap-advance 536870912
+    in let fe = compile-frontend-ir src "Program" compile-flags-default
+    in if bag-has-errors (fe.bag) then print-text (cir-halted (bag-errors (fe.bag)))
+    else let lifted-ir = lift-ir-for-emit (fe.ir) compile-flags-default
+    in act
+      write-binary (cir-report (fe.bag))
+      print-text (emit-ir-chapter (ir-prune-unreachable-roots lifted-ir cir-emit-roots) (fe.text-meta) (fe.type-defs))
+    end
+  end

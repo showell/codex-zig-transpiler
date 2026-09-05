@@ -5,3 +5,11 @@ __pycache__/
 # set: Get-PlugSourceDigest globs *.codex in the plug dir, and the ladder
 # assembles a synthetic plug whose dir holds none. Nothing here reads it.
 /generated/*.sources
+
+# codexir's two intermediates. Both are regenerated in 97 seconds from
+# tracked inputs -- the subject is codexzig-subject.codex with one chapter
+# swapped, the zig is codexzig reading it -- so tracking them would be
+# tracking a file every run rewrites. codexzig.qemu.zig is tracked for the
+# opposite reason: a GUEST made it, and reproducing it costs three of them.
+/generated/codexir-subject.codex
+/generated/codexir.native.zig
