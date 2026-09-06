@@ -1,8 +1,8 @@
 Everything beside this file is emitted by build.py. Nothing here is
 source; edit source/ and rebuild.
 
-checkout   /home/steve/showell_repos/u56sat
-           cc6eab7e  fix: the ll-copy fragment split a definition from its signature
+checkout   /home/steve/showell_repos/cobblestone-addrfix
+           422405d0  compiler-backlog COMPILER-54: fifteen foreword chapters are CRLF and cannot be read as wri
 seed       Codex.cdx  3179934 bytes
 zig        0.16.0
 qemu       QEMU emulator version 8.2.2 (Debian 1:8.2.2+ds-0ubuntu1.18)
@@ -11,16 +11,16 @@ guest      accel=tcg  mem=3072MB
 
 what each guest was actually handed (intake/):
 
-  ringplug-source.codex.blob          386648 bytes   mode 'CDX map'
-  codexzig-subject.codex.blob        3440965 bytes   mode 'IR-CCE decks=172'
-  codexzig.ir.blob                  12029510 bytes   mode 'RING zig'
+  ringplug-source.codex.blob          388192 bytes   mode 'CDX map'
+  codexzig-subject.codex.blob        3445171 bytes   mode 'IR-CCE decks=172'
+  codexzig.ir.blob                  12032019 bytes   mode 'RING zig'
 
 what each guest touched of its cap:
 
-  ringplug.cdx                       399 MB of 3072 MB
+  ringplug.cdx                       400 MB of 3072 MB
   codexzig.ir                        711 MB of 3072 MB
   codexzig.qemu.zig.cce             1285 MB of 3072 MB
 
 fixed point  HOLDS
 arith.codex  MATCHES arith.expected
-built in     508s
+built in     549s
