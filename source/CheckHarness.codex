@@ -12,10 +12,27 @@ Chapter: Parsmi--CheckHarness
  chapter. Every real unit leads with ListUtils and Tuple, so the layer has been
  graded on a program shape it never actually meets.
 
- IT READS A UNIT, WHICH IS THE WHOLE POINT. `compile-checked` is the DRIVER'S
- own phase and takes the source of a whole compilation unit, so this grades
- what lowering will actually be handed rather than a single chapter checked in
- isolation.
+ IT TAKES WHATEVER THE DRIVER TAKES. `compile-checked` is the driver's own
+ phase, so a bare one-chapter file and a resolved multi-chapter unit both go
+ through it unchanged -- and a program is fed here in the shape it is actually
+ compiled in. `fib` cites nothing and uses neither tuples nor lists, so it is
+ fed BARE: resolving it first prepends ListUtils and Tuple, which moves every
+ number in this dump and answers a question nobody asked. Bare fib mints row
+ ids up to 15; the same fib behind the two implicit chapters reaches 469.
+
+ `type-bindings` IS `all-bindings`, WHICH IS BIGGER THAN IT LOOKS AND DOUBLE-
+ COUNTS. It is `check-result.types & resolved-env`, so a chapter's own defs
+ appear TWICE -- once inferred, once from the environment. For bare fib:
+
+     257 builtins carrying a declared type
+     +  3 fib's defs, in the environment
+     +  3 fib's defs again, from check-result.types
+     = 263
+
+ Predicted from `Types/Builtins.codex` and measured on this binary; they agree.
+ The eight builtins that declare no type -- True, False, Nothing, open-file,
+ close-file, read-all, now, random-integer -- are the difference between that
+ 257 and the 265 names the table carries.
 
 Section: Halt
 
