@@ -12,4 +12,6 @@ __pycache__/
 # tracking a file every run rewrites. codexzig.qemu.zig is tracked for the
 # opposite reason: a GUEST made it, and reproducing it costs three of them.
 /generated/codexir-subject.codex
+/generated/codexcheck-subject.codex
 /generated/codexir.native.zig
+/generated/codexcheck.native.zig
