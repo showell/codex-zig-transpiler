@@ -45054,7 +45054,8 @@ Section: AST-Level Chapter Scoping
   scope-achapter : AChapter, SkipListText, List ChapterAssignment, Integer -> AChapter
   scope-achapter (ast) (colliding) (assignments) (ceiling) =
    let slug-cache = for a in assignments -> cite-key (a.chapter-slug)
-   in let raw-defs = scope-adefs-ll (ast.defs) colliding assignments (ast.citations) slug-cache "" [] 0 [] ceiling
+   in let cite-slugs = for c in (ast.citations) -> find-slug-for-cite-name (c.quire.value) (c.chapter-name.value) assignments slug-cache
+   in let raw-defs = scope-adefs-ll (ast.defs) colliding assignments (ast.citations) cite-slugs "" [] 0 [] ceiling
    in deck-record (AChapter {
     name = ast.name,
     defs = deck-record (__linked-list-to-list raw-defs),
@@ -45076,14 +45077,14 @@ Section: AST-Level Chapter Scoping
    })
 
   scope-adefs-ll : List ADef, SkipListText, List ChapterAssignment, List ACitesDecl, List Text, Text, List RenameEntry, Integer, LinkedList ADef, Integer -> LinkedList ADef
-  scope-adefs-ll (defs) (colliding) (assignments) (citations) (slug-cache) (cur-slug) (cur-rn) (i) (acc) (ceiling) =
+  scope-adefs-ll (defs) (colliding) (assignments) (citations) (cite-slugs) (cur-slug) (cur-rn) (i) (acc) (ceiling) =
    if i == list-length defs then acc
    else if deck-short-of ceiling demand-scope-guard-band then acc
    else let d = list-at defs i
    in let rn = if d.chapter-slug == cur-slug then cur-rn
-      else apply-cite-overrides (build-chapter-rename-map colliding assignments (d.chapter-slug)) citations colliding assignments slug-cache (d.chapter-slug) 0
+      else apply-cite-overrides (build-chapter-rename-map colliding assignments (d.chapter-slug)) citations colliding assignments cite-slugs (d.chapter-slug) 0
    in let new-name = deck-record (Name { value = rename-lookup rn (d.name.value) })
-   in scope-adefs-ll defs colliding assignments citations slug-cache (d.chapter-slug) rn (i + 1) (__linked-list-push acc (deck-record (ADef {
+   in scope-adefs-ll defs colliding assignments citations cite-slugs (d.chapter-slug) rn (i + 1) (__linked-list-push acc (deck-record (ADef {
     name = new-name,
     params = d.params,
     declared-type = d.declared-type,
@@ -45092,17 +45093,46 @@ Section: AST-Level Chapter Scoping
     span = d.span
    }))) ceiling
 
+ EVERY CITATION IS RESOLVED ONCE PER UNIT, not once per slug transition.
+ `find-slug-for-cite-name` depends on the quire, the cite name, the assignments
+ and the slug cache, and NONE of those changes while the defs walk runs -- so
+ the walk recomputed the same answers at every chapter boundary. `scope-achapter`
+ resolves them beside the cache that feeds them and carries the answers down.
+
+ The three factors are (slug transitions) x (citations) x (slug cache), and the
+ cache is one entry per DEFINITION rather than per chapter, which is what makes
+ the product large. Compiling the compiler: 91 transitions, 106 citations, 6,431
+ assignments -- 9,646 resolutions, each walking 6,431 entries with a suffix
+ compare per entry, and now 106 of them.
+
+ IT IS INVISIBLE ON A SMALL SUBJECT and that is worth knowing before measuring
+ one. A four-chapter bundle with one citation resolves four times and saves
+ three; fourteen such subjects came out byte-identical with their step counts
+ unchanged to a tenth of a percent. Correct, and no faster, because there was
+ nothing there to save.
+
+ MEASURED ON THE ONE SUBJECT BIG ENOUGH TO HAVE THE PRODUCT: the compiler
+ compiling itself, through a tree-walking interpreter where the work is
+ counted rather than timed.
+
+   without   43,762,877,372 steps
+   with      29,306,453,914 steps      a third of the compile
+
+ and the IR is byte-identical either way -- 19,570,302 bytes over 6,890
+ definitions, against an arm that shares no code with the one that produced
+ it.
+
   apply-cite-overrides : List RenameEntry, List ACitesDecl, SkipListText, List ChapterAssignment, List Text, Text, Integer -> List RenameEntry
-  apply-cite-overrides (rn) (citations) (colliding) (assignments) (slug-cache) (cur-slug) (i) =
-   apply-cite-overrides-loop rn citations colliding assignments slug-cache cur-slug i
+  apply-cite-overrides (rn) (citations) (colliding) (assignments) (cite-slugs) (cur-slug) (i) =
+   apply-cite-overrides-loop rn citations colliding assignments cite-slugs cur-slug i
 
   apply-cite-overrides-loop : List RenameEntry, List ACitesDecl, SkipListText, List ChapterAssignment, List Text, Text, Integer -> List RenameEntry
-  apply-cite-overrides-loop (rn) (citations) (colliding) (assignments) (slug-cache) (cur-slug) (i) =
+  apply-cite-overrides-loop (rn) (citations) (colliding) (assignments) (cite-slugs) (cur-slug) (i) =
    if i == list-length citations then rn
    else let cite = list-at citations i
-   in let cite-slug = find-slug-for-cite-name (cite.quire.value) (cite.chapter-name.value) assignments slug-cache
+   in let cite-slug = list-at cite-slugs i
    in let rn2 = apply-cite-selected rn (cite.selected-names) cite-slug colliding assignments cur-slug 0
-   in apply-cite-overrides-loop rn2 citations colliding assignments slug-cache cur-slug (i + 1)
+   in apply-cite-overrides-loop rn2 citations colliding assignments cite-slugs cur-slug (i + 1)
 
  The suffix test compares characters in place. It runs per assignment,
  per citation that misses the composed key, per slug transition of the
@@ -45110,6 +45140,24 @@ Section: AST-Level Chapter Scoping
  retains every byte it allocates until the phase compact. Written with
  `substring`, this one comparison put 5.4 MB per bare-name citation on
  the LOWER deck, about 135 MB of the selfhost's 302.
+
+
+ A `text-contains` GUARD IN FRONT OF THIS LOOP IS A TRAP, and it was measured
+ rather than argued: it made a self-compile dramatically SLOWER. `text-contains`
+ is a builtin AND this bundle defines its own, `text-contains (s) (sub) =
+ text-index-of s sub >= 0`, so the call site gets a full substring search
+ written in Codex instead of one native call. The compiler says so itself --
+ CDX3005, "a shadow that computes the same result more slowly is the failure
+ mode that has actually cost time here" -- and that warning is printed on every
+ build of this subject.
+
+ THE REAL COST IS THE OUTER LOOP AND NOT THIS ONE.
+ `find-slug-by-bare-name` walks the whole slug cache per bare name, twice on a
+ hit, and asks this question of every slug. That is (names) x (slugs) x
+ (chars); a lookup keyed by bare name would make the first two constant, and
+ nothing done inside this function can. Measured on a tree-walking interpreter,
+ where one character comparison is one function call: cite resolution held 78%
+ of the samples between seconds 45 and 200 of a self-compile and none after.
 
   slug-has-suffix : Text, Text -> Boolean
   slug-has-suffix (s) (suf) =
@@ -71213,7 +71261,7 @@ Section: Chapter Emission
   zig-p-cx-peek-qword = [ShakeLit "// Wrapping, because bare metal does a single 64-bit load and every\n// bit pattern is a legal i64. Rebuilding the value with checked * and +\n// traps on any qword whose top byte sets the high bit -- that is, on\n// every NEGATIVE qword. Measured 2026-08-21 with\n// findings/probe-peek-qword.codex: bytes 00 00 00 00 00 00 00 FF answer\n// -72057594037927936 on bare metal and panic here.\nfn ", ShakeUse "cx_peek_qword", ShakeLit "(b: i64, off: i64) i64 {\n    ", ShakeUse "cx_buf_want", ShakeLit "(b + off + 8);\n    var cx_v: i64 = 0;\n    var cx_j: i64 = 7;\n    while (cx_j >= 0) : (cx_j -= 1) cx_v = cx_v *% 256 +% ", ShakeUse "cx_heap_mem", ShakeLit "[@as(usize, @intCast(b + off + cx_j))];\n    return cx_v;\n}\n"]
 
   zig-p-cx-address-of : List ShakeFrag
-  zig-p-cx-address-of = [ShakeLit "// Bare metal's address-of is emit-identity-builtin: it returns the VALUE,\n// and since records, lists and texts are pointers there, the value IS the\n// address. Answering a constant 0 made every object identical to every other\n// one AND to null, and the compiler reads that as an answer: mode-ordinal and\n// real-width-ordinal short-circuit on `address-of m == 0`, so they returned 0\n// for every input, and copy-sx-text decides durability with `address-of t < b`,\n// so it always shared and never rematerialised -- into a region about to be\n// reclaimed. Finding 31.\n//\n// The 0 was justified by X86_64Compound's note that address-of \"silently\n// answers 0 on any target where it cannot be modelled: that cost the C# arm\n// every tag in this table\". That note describes the hazard as a cost, not a\n// licence, and this is not such a target -- one flat region and pointers into\n// it is exactly the shape bare metal has.\n//\n// HEAP-RELATIVE, not a host pointer: the answers are compared against\n// __heap-save values, which are offsets from cx_heap_base. A raw @intFromPtr\n// would order correctly among itself and be nonsense against those.\nfn ", ShakeUse "cx_address_of", ShakeLit "(v: anytype) i64 {\n    switch (@typeInfo(@TypeOf(v))) {\n        .int, .comptime_int => return @intCast(v),\n        .bool => return @intFromBool(v),\n        .pointer => |cx_pi| {\n            // AN EMPTY SLICE HAS NO POINTER. Zig leaves .ptr undefined when len\n            // is 0 -- safe builds fill it with 0xaa -- so asking a zero-length\n            // Text where it lives reads poison, and @intCast traps on the\n            // distance from the region to a pointer that was never a pointer.\n            // Bare metal has no such case: its empty text is a real block at a\n            // real address. 0 is the right answer rather than a lie -- mcopy-text\n            // reads it as \"not in the copied region, share as-is\", and an empty\n            // text is exactly what needs no copy.\n            if (cx_pi.size == .slice and v.len == 0) return 0;\n            const cx_p = if (cx_pi.size == .slice) @intFromPtr(v.ptr) else @intFromPtr(v);\n            const cx_base = @intFromPtr(", ShakeUse "cx_heap_base", ShakeLit "());\n            return if (cx_p >= cx_base) @intCast(cx_p - cx_base) else 0;\n        },\n        // A payload-free Codex union is a bare zig enum, and bare metal\n        // hands back the tag word -- the same identity this switch gives\n        // an Integer. U54s mcopy-real-width is the first caller.\n        .@\"enum\" => return @intFromEnum(v),\n        else => @compileError(\"zig plug: no address-of for \" ++ @typeName(@TypeOf(v))),\n    }\n}\n"]
+  zig-p-cx-address-of = [ShakeLit "// Bare metal's address-of is emit-identity-builtin: it returns the VALUE,\n// and since records, lists and texts are pointers there, the value IS the\n// address. Answering a constant 0 made every object identical to every other\n// one AND to null, and the compiler reads that as an answer: mode-ordinal and\n// real-width-ordinal short-circuit on `address-of m == 0`, so they returned 0\n// for every input, and copy-sx-text decides durability with `address-of t < b`,\n// so it always shared and never rematerialised -- into a region about to be\n// reclaimed. Finding 31.\n//\n// The 0 was justified by X86_64Compound's note that address-of \"silently\n// answers 0 on any target where it cannot be modelled: that cost the C# arm\n// every tag in this table\". That note describes the hazard as a cost, not a\n// licence, and this is not such a target -- one flat region and pointers into\n// it is exactly the shape bare metal has.\n//\n// HEAP-RELATIVE, not a host pointer: the answers are compared against\n// __heap-save values, which are offsets from cx_heap_base. A raw @intFromPtr\n// would order correctly among itself and be nonsense against those.\nfn ", ShakeUse "cx_address_of", ShakeLit "(v: anytype) i64 {\n    switch (@typeInfo(@TypeOf(v))) {\n        .int, .comptime_int => return @intCast(v),\n        .bool => return @intFromBool(v),\n        .pointer => |cx_pi| {\n            // AN EMPTY SLICE HAS NO POINTER. Zig leaves .ptr undefined when len\n            // is 0 -- safe builds fill it with 0xaa -- so asking a zero-length\n            // Text where it lives reads poison, and @intCast traps on the\n            // distance from the region to a pointer that was never a pointer.\n            // Bare metal has no such case: its empty text is a real block at a\n            // real address. 0 is the right answer rather than a lie -- mcopy-text\n            // reads it as \"not in the copied region, share as-is\", and an empty\n            // text is exactly what needs no copy.\n            //\n            // BELOW THE BASE IS A REAL ADDRESS AND NOT THAT SENTINEL. A source\n            // literal lives in .rodata, under the heap, and answering 0 for it\n            // reuses the one value the compiler reads as \"no address\" --\n            // mcopy-name-fresh keys a Name on `cons-mix 701 (address-of tv)` and\n            // nothing else, so every literal-named Name collided on one key and\n            // the first one copied was adopted by all of them. Measured: a\n            // program whose six effect labels are Device.Mmio x3, Device.Port x2\n            // and Console.Write x1 on bare metal came out Device.Mmio x6 here.\n            // That is Finding 31 again, in the residue its own fix left behind.\n            //\n            // The displacement is SIGNED, so .rodata answers a distinct negative\n            // and every reader gets what it wants: `a == 0` stays false, and\n            // `a < mc.mc-floor` and `address-of t < b` are true, which is the\n            // right answer -- a literal never moves, so sharing it is durable\n            // and copying it would be waste. Bare metal has the same shape from\n            // the other side: its literals sit in the image below the heap and\n            // its address-of, being the identity, answers them distinctly too.\n            //\n            // Offset 0 is not a live object and so cannot collide with the\n            // empty-slice sentinel: cx_hp starts at 6291456, and everything\n            // under it belongs to the deck.\n            if (cx_pi.size == .slice and v.len == 0) return 0;\n            const cx_p = if (cx_pi.size == .slice) @intFromPtr(v.ptr) else @intFromPtr(v);\n            const cx_base = @intFromPtr(", ShakeUse "cx_heap_base", ShakeLit "());\n            return @as(i64, @intCast(cx_p)) - @as(i64, @intCast(cx_base));\n        },\n        // A payload-free Codex union is a bare zig enum, and bare metal\n        // hands back the tag word -- the same identity this switch gives\n        // an Integer. U54s mcopy-real-width is the first caller.\n        .@\"enum\" => return @intFromEnum(v),\n        else => @compileError(\"zig plug: no address-of for \" ++ @typeName(@TypeOf(v))),\n    }\n}\n"]
 
   zig-p-cx-dptr : List ShakeFrag
   zig-p-cx-dptr = [ShakeLit "// The deck is the C# plug's rule (_Buf.deck_enter/deck_exit): the\n// outermost enter parks the bump pointer in the bivy and swaps the deck\n// pointer in; the outermost exit swaps back. Deck position is observable\n// (the depot's deck-*-contract subjects print it), so a no-op deck is a\n// wrong answer, not a simplification.\nvar ", ShakeUse "cx_dptr", ShakeLit ": i64 = 0;\n"]
