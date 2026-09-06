@@ -1,0 +1,97 @@
+Chapter: Parsmi--CheckHarness
+
+ The compiler as a program that stops at the CHECK layer:
+ `codexcheck < prog.codex 2> prog.check`.
+
+ CodexIrHarness beside this one stops at the IR wire; this one stops one phase
+ earlier, where the types are decided. What it buys is the same thing codexir
+ buys and at the same pin: a second arm for the layer being built. The Rust
+ checker has had exactly one gold -- `$CODEX_GOLDS/rungs/check.truth`, which is
+ bare `fib`, ONE chapter, cut at 53b3b213 -- because the harness that produced
+ it embeds its subject as a text literal and `parse-document` parses one
+ chapter. Every real unit leads with ListUtils and Tuple, so the layer has been
+ graded on a program shape it never actually meets.
+
+ IT READS A UNIT, WHICH IS THE WHOLE POINT. `compile-checked` is the DRIVER'S
+ own phase and takes the source of a whole compilation unit, so this grades
+ what lowering will actually be handed rather than a single chapter checked in
+ isolation.
+
+Section: Halt
+
+ The same gate the other harnesses carry, in the same words, so a refusal
+ compares as bytes rather than needing a reader that knows three formats.
+
+  cc-halted : List Diagnostic -> Text
+  cc-halted (es) =
+   let n = list-length es
+   in let e0 = list-at es 0
+   in "CODEGEN-HALTED: " & show n & " error(s); no IR emitted; first CDX" & show (e0.code) & " " & (e0.message) & "\n"
+
+Section: Kinds
+
+ `type-kind` from the ladder's own CheckHarness, verbatim. The Rust side prints
+ these words already, so keeping the spelling means the two dumps diff directly
+ instead of through a translation table that could itself be wrong.
+
+  cc-type-kind : CodexType -> Text
+  cc-type-kind (t) =
+   when t
+    is IntegerTy (lo) (hi) (m) -> "int"
+    is TextTy -> "text"
+    is BooleanTy -> "bool"
+    is CharTy -> "char"
+    is ListTy (e) -> "list"
+    is FunTy (p) (r) (q) -> "fn"
+    is EffectfulTy (e) (s) (i) -> "eff"
+    is ForAllTy (i) (b) -> "forall"
+    is ForAllEff (c) (b) -> "foralleff"
+    is TypeVar (i) -> "tvar"
+    is SumTy (n) (a) (c) -> "sum:" & n.value
+    is RecordTy (n) (a) (f) -> "rec:" & n.value
+    is ConstructedTy (n) (a) -> "con:" & n.value
+    is TypeCon (n) -> "tycon:" & n.value
+    is otherwise -> "other"
+
+  cc-bindings : List TypeBinding, Integer, Integer -> [Console] Nothing
+  cc-bindings (bs) (i) (len) = act
+    if i >= len then print-line-uni "."
+    else act
+      let b = list-at bs i
+      in print-line-uni ("tb " & (b.name) & " " & cc-type-kind (b.bound-type))
+      cc-bindings bs (i + 1) len
+    end
+  end
+
+Section: Driver
+
+ `next-row-id` IS REPORTED AND THE LADDER'S HARNESS NEVER WAS. It is the
+ counter behind the row variable in an effectful builtin's wire type --
+ `print-line-uni` is `(fn text nothing (row (labels (label "Console.Write" ""))
+ "" 460))` and that 460 is this number -- so it is the one figure that says
+ whether a checker can emit an effectful type at all. Measured on the oracle:
+ 454 of `fib`'s 460 are minted before the subject's own code is reached, by the
+ two implicit chapters every unit carries.
+
+  opening : [Console, FileSystem] Nothing = act
+    src <- read-file-uni "/dev/stdin"
+    let mountain-base = init-phase-allocator
+    in let deck-base = __heap-save
+    in let deck-set = __deck-set deck-base
+    in let deck-adv = __heap-advance 536870912
+    in let checked = compile-checked src "Program" compile-flags-default
+    in if bag-has-errors (checked.bag) then print-text (cc-halted (bag-errors (checked.bag)))
+    else let bs = checked.all-bindings
+    in let ust = checked.ust
+    in act
+      print-line-uni "--- check ---"
+      print-line-uni ("check-errors " & show ((checked.bag).error-count))
+      print-line-uni ("type-bindings " & show (list-length bs))
+      cc-bindings bs 0 (list-length bs)
+      print-line-uni ("substitutions " & show (list-length (ust.substitutions)))
+      print-line-uni ("next-id " & show (ust.next-id))
+      print-line-uni ("next-row-id " & show (ust.next-row-id))
+      print-line-uni ("expr-types " & show (list-length (ust.expr-types)))
+      print-line-uni "---"
+    end
+  end
