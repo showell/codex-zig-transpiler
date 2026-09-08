@@ -2,7 +2,7 @@ Everything beside this file is emitted by build.py. Nothing here is
 source; edit source/ and rebuild.
 
 checkout   /home/steve/showell_repos/cobblestone-u57
-           821e650d  zig plug: the real-to-text prelude shadows the prelude's own boxing helper
+           e941ba11  zig plug: the boxing comment states the rule, not how it was found
 seed       Codex.cdx  3217563 bytes
 zig        0.16.0
 qemu       QEMU emulator version 8.2.2 (Debian 1:8.2.2+ds-0ubuntu1.18)
@@ -11,16 +11,15 @@ guest      accel=tcg  mem=3072MB
 
 what each guest was actually handed (intake/):
 
-  ringplug-source.codex.blob          391110 bytes   mode 'CDX map'
-  codexzig-subject.codex.blob        3479576 bytes   mode 'IR-CCE decks=172'
+  ringplug-source.codex.blob          390571 bytes   mode 'CDX map'
+  codexzig-subject.codex.blob        3479037 bytes   mode 'IR-CCE decks=172'
   codexzig.ir.blob                  12109027 bytes   mode 'RING zig'
 
 what each guest touched of its cap:
 
-  ringplug.cdx                       403 MB of 3072 MB
-  codexzig.ir                        713 MB of 3072 MB
-  codexzig.qemu.zig.cce             1323 MB of 3072 MB
+  ringplug.cdx                       402 MB of 3072 MB
+  codexzig.ir                        714 MB of 3072 MB
 
 fixed point  HOLDS
 arith.codex  MATCHES arith.expected
-built in     461s
+built in     309s
