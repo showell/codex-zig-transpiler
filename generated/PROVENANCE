@@ -27,8 +27,12 @@ what each guest was actually handed (intake/):
   codexzig-subject.codex.blob        3479037 bytes   mode 'IR-CCE decks=172'
   codexzig.ir.blob                  12109027 bytes   mode 'RING zig'
 
-no guest ran (every stage was already current)
+what each guest touched of its cap:
+
+  ringplug.cdx                       402 MB of 3072 MB
+  codexzig.ir                        713 MB of 3072 MB
+  codexzig.qemu.zig.cce             1324 MB of 3072 MB
 
 fixed point  HOLDS
 arith.codex  MATCHES arith.expected
-built in     4s
+built in     481s
