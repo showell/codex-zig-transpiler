@@ -31,13 +31,14 @@ foreach ($decl in @('codex/compiler/Core/Name.codex',
 # only ones present rather than duplicates of the compiler's.
 Add-PlugChapter -Lines $lines -Path (Join-Path $repo 'codex/plugs/common/PlugTypes.codex') -Quire 'Zig'
 Add-PlugChapter -Lines $lines -Path (Join-Path $repo 'codex/plugs/common/IRTextParser.codex') -Quire 'Zig'
-# EVERY PAGE OF Chapter: Zig Emitter, from source/zig_plug_pages.txt.
-# It was one line when the emitter was one file. The emitter is four files now,
-# and a bundle carrying only the first comes back from the seed as 17 x CDX3002
-# Undefined name: emit-zig-expr -- names defined on pages nobody asked for.
-foreach ($zp in (Get-Content (Join-Path $PSScriptRoot 'zig_plug_pages.txt') |
-                 Where-Object { $_.Trim() -and -not $_.Trim().StartsWith('#') })) {
-    Add-PlugChapter -Lines $lines -Path (Join-Path $repo "codex/plugs/zig/$($zp.Trim()).codex") -Quire 'Zig'
+# EVERY PAGE OF Chapter: Zig Emitter, READ FROM THE CHECKOUT. A bundle short
+# a page comes back from the seed as undefined names for every definition on
+# it, so the page set must come from the checkout being bundled rather than
+# from a list kept here, which is right for one checkout and wrong for the
+# next. zig-plug-pages.ps1 reads the chapter's own `Page N of M` footers.
+. (Join-Path $PSScriptRoot 'zig-plug-pages.ps1')
+foreach ($zp in (Get-ZigEmitterPages -Repo $repo)) {
+    Add-PlugChapter -Lines $lines -Path (Join-Path $repo "codex/plugs/zig/$($zp).codex") -Quire 'Zig'
 }
 Add-PlugChapter -Lines $lines -Path (Join-Path $here 'ZigPlugRing.codex') -Quire 'Zig'
 
