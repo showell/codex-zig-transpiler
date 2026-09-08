@@ -23,7 +23,7 @@ so the whole chain is on the host --
     codexzig-subject.codex, harness swapped -> codexzig -> zig build-exe
 
 -- about two minutes, against build.py's seven-guest run. That is the only
-reason this belongs beside build.py rather than in codex-qemu.
+reason this belongs beside build.py rather than in cobblestone-qemu.
 
 THE SUBJECT IS build.py'S OWN, WITH ONE CHAPTER REPLACED. Not a second chapter
 list: `source/bundle_codexzig.ps1` names about ninety chapters with reasons
@@ -32,19 +32,10 @@ silence. This takes `generated/codexzig-subject.codex` -- the same bytes the
 fixed point was measured on -- drops its trailing harness chapter and appends
 `source/CodexIrHarness.codex`. The zig emitter chapters ride along unused,
 which costs binary size and nothing else.
-
-**THE EFFECT LABELS IN THIS TOOL'S IR ARE WRONG, and that is not this tool.**
-`cx_address_of` answers 0 for any Text below the heap base -- every string
-literal in the emitted program -- and `mcopy-name-fresh` keys a Name by
-`cons-mix 701 (address-of tv)` and nothing else, so every literal-named Name
-collides on one key and the first one copied is adopted by all of them. One
-program whose six labels are Device.Mmio x3, Device.Port x2 and Console.Write
-x1 on bare metal and on the Rust interpreter comes out Device.Mmio x6 here. It
-is in the shipped -cdx path too, so it is the plug and not the harness. Until
-that is fixed, an effect row out of this tool is not evidence.
 """
 
 import argparse
+import hashlib
 import pathlib
 import subprocess
 import sys
@@ -207,6 +198,55 @@ def smoke_check():
     say('smoke: an undefined name is refused, as the driver refuses it')
 
 
+def sha(path):
+    return hashlib.sha256(pathlib.Path(path).read_bytes()).hexdigest()
+
+
+def fingerprint_of(inputs):
+    return '\n'.join(sha(i) for i in inputs)
+
+
+def fingerprint(binary):
+    fp = LOCAL / (binary.name + '.fp')
+    return fp.read_text().strip() if fp.is_file() else None
+
+
+def stamp(binary, inputs):
+    (LOCAL / (binary.name + '.fp')).write_text(fingerprint_of(inputs) + '\n')
+
+
+def receipt():
+    """What these oracles were built from, since nothing else records it.
+
+    The Rust arm is graded against codexir and codexcheck and ports from
+    codexcheck-subject.codex, so the pin behind them decides what a Rust gate
+    means. They are gitignored and carry no stamp of their own, which leaves
+    mtime as the only evidence -- and mtime says when, never what.
+
+    The pin is not read from the environment: these are built from build.py's
+    subject, so the checkout that answers for them is the one build.py already
+    recorded. Taking it from generated/PROVENANCE keeps the two receipts from
+    being able to disagree.
+    """
+    pin = ['(no generated/PROVENANCE: run ./build.py first)']
+    prov = GEN / 'PROVENANCE'
+    if prov.is_file():
+        lines = prov.read_text().splitlines()
+        for i, line in enumerate(lines):
+            if line.startswith('checkout'):
+                pin = [line] + lines[i + 1:i + 2]
+                break
+    (GEN / 'PROVENANCE.oracles').write_text(
+        'codexir and codexcheck -- the oracles rust-codex-compiler is graded\n'
+        'against, and codexcheck-subject.codex, the source it ports from.\n'
+        'Emitted by build_codexir.py, not by build.py.\n\n'
+        'built      ' + time.strftime('%Y-%m-%dT%H:%M:%SZ', time.gmtime()) + '\n'
+        + '\n'.join(pin) + '\n'
+        f'subject    {sha(SUBJECT)[:16]}  {SUBJECT.name}\n'
+        f'codexzig   {sha(CODEXZIG)[:16]}  the transpiler that emitted them\n')
+    say(f'wrote {(GEN / "PROVENANCE.oracles").name}')
+
+
 def main():
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     ap.add_argument('--force', action='store_true')
@@ -220,18 +260,18 @@ def main():
             (HARNESS, IR_SUBJECT, IR_ZIG, CODEXIR, 'codexir'),
             (CHECK_HARNESS, CHECK_SUBJECT, CHECK_ZIG, CODEXCHECK, 'codexcheck')):
         head(name) if 'head' in globals() else say(f'==== {name} ====')
-        fresh = (binary.is_file()
-                 and binary.stat().st_mtime > max(SUBJECT.stat().st_mtime,
-                                                  harness.stat().st_mtime,
-                                                  CODEXZIG.stat().st_mtime))
-        if fresh and not args.force:
-            say(f'{binary.name} is newer than its inputs; --force to rebuild')
+        inputs = (SUBJECT, harness, CODEXZIG)
+        if binary.is_file() and fingerprint(binary) == fingerprint_of(inputs) \
+                and not args.force:
+            say(f'{binary.name} is the answer for these inputs; --force to rebuild')
         else:
             swap_harness(harness, subject)
             transpile(subject, zig)
             build_exe(zig, binary)
+            stamp(binary, inputs)
         smoke() if name == 'codexir' else smoke_check()
         say(f'{name} OK')
+    receipt()
     return 0
 
 

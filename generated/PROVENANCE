@@ -3,12 +3,12 @@ Nothing in generated/ is source; edit source/ and rebuild.
 This file answers for what build.py emits. These sit beside them
 and it does not vouch for their pin:
 
-  codexcheck-subject.codex   2026-09-06 22:14
-  codexcheck.native.zig      2026-09-06 22:15
-  codexir-subject.codex      2026-09-06 22:13
-  codexir.native.zig         2026-09-06 22:14
-  local/codexcheck           2026-09-06 22:15
-  local/codexir              2026-09-06 22:14
+  codexcheck-subject.codex   2026-09-08 22:29
+  codexcheck.native.zig      2026-09-08 22:30
+  codexir-subject.codex      2026-09-08 22:28
+  codexir.native.zig         2026-09-08 22:29
+  local/codexcheck           2026-09-08 22:30
+  local/codexir              2026-09-08 22:29
 
 checkout   /home/steve/showell_repos/cobblestone-u57
            e941ba11  zig plug: the boxing comment states the rule, not how it was found
