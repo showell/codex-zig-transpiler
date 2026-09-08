@@ -445,8 +445,14 @@ def main():
     else:
         intake += ['', 'no guest ran (every stage was already current)']
     (GEN / 'PROVENANCE').write_text(
-        'Everything beside this file is emitted by build.py. Nothing here is\n'
-        'source; edit source/ and rebuild.\n\n'
+        'Nothing in generated/ is source; edit source/ and rebuild. This file\n'
+        'describes what build.py emits: ringplug*, codexzig-subject.codex,\n'
+        'codexzig.ir, codexzig.{qemu,native}.zig, arith.zig, intake/ and\n'
+        'local/codexzig. The codexir and codexcheck pair beside them --\n'
+        'their subjects, their .native.zig and local/{codexir,codexcheck} --\n'
+        'is emitted by build_codexir.py at whatever pin it last ran, which\n'
+        'is not necessarily this one. Those are gitignored and carry no\n'
+        'stamp of their own.\n\n'
         + '\n'.join(provenance + intake)
         + f'\n\nfixed point  {"HOLDS" if held else "BROKEN"}\n'
         + f'{SAMPLE.name:<12} {"MATCHES" if ran else "DIFFERS"} '
