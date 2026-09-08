@@ -1,9 +1,14 @@
 # generated/
 
-Nothing here is source. Every file is emitted by `../build.py`, and editing
-one is editing something that will be overwritten without warning. The
-sources are in `../source/` and in the Cobblestone checkout that
-`PROVENANCE` names.
+Nothing here is source except this file. Editing anything else is editing
+something that will be overwritten without warning; the sources are in
+`../source/` and in the Cobblestone checkout that `PROVENANCE` names.
+
+**More than one generator writes here.** `../build.py` emits most of it and
+`PROVENANCE` lists, at the top, exactly what it does NOT answer for --
+`../build_codexir.py` emits the `codexir` and `codexcheck` pair at whatever
+pin it last ran, which need not be the pin `PROVENANCE` names. Read that list
+rather than assuming a single owner.
 
 **These files are the point of the repository, not a side effect of it.** They
 are what a Codex compiler emits when it is asked to produce zig, and they are

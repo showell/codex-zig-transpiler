@@ -1,5 +1,14 @@
-Everything beside this file is emitted by build.py. Nothing here is
-source; edit source/ and rebuild.
+Nothing in generated/ is source; edit source/ and rebuild.
+
+This file answers for what build.py emits. These sit beside them
+and it does not vouch for their pin:
+
+  codexcheck-subject.codex   2026-09-06 22:14
+  codexcheck.native.zig      2026-09-06 22:15
+  codexir-subject.codex      2026-09-06 22:13
+  codexir.native.zig         2026-09-06 22:14
+  local/codexcheck           2026-09-06 22:15
+  local/codexir              2026-09-06 22:14
 
 checkout   /home/steve/showell_repos/cobblestone-u57
            e941ba11  zig plug: the boxing comment states the rule, not how it was found
@@ -15,11 +24,8 @@ what each guest was actually handed (intake/):
   codexzig-subject.codex.blob        3479037 bytes   mode 'IR-CCE decks=172'
   codexzig.ir.blob                  12109027 bytes   mode 'RING zig'
 
-what each guest touched of its cap:
-
-  ringplug.cdx                       402 MB of 3072 MB
-  codexzig.ir                        714 MB of 3072 MB
+no guest ran (every stage was already current)
 
 fixed point  HOLDS
 arith.codex  MATCHES arith.expected
-built in     309s
+built in     4s

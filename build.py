@@ -346,6 +346,46 @@ def fixed_point():
 
 # ---------------------------------------------------------------------- main
 
+def unowned():
+    """What sits in generated/ that this build does not answer for.
+
+    The outputs are already declared once, as the module constants above; this
+    reads them rather than repeating them, so a stage added there is covered
+    here without anyone remembering to. Byproducts written beside an output --
+    .map, .diags, .sources, .fp, .cce, .stage1 -- belong to it and are matched
+    by prefix. mtime cannot answer this question: a skipped stage leaves one of
+    ours untouched, and would read as somebody else's.
+
+    An unowned file is not an error. build_codexir.py emits the codexir and
+    codexcheck pair -- the subject rust-codex-compiler ports from and the
+    oracles it is graded against -- at whatever pin it last ran, which need not
+    be this one. Reading them as covered by this file is the error.
+    """
+    def stem(path):
+        # a byproduct is named for its output and need not sit beside it:
+        # codexzig-subject.sources next to codexzig-subject.codex, but
+        # local/ringplug.cdx.map for generated/ringplug.cdx. The leading
+        # name segment is what ties them, so directory is not part of it.
+        n = path.name
+        return n[:n.index('.')] if '.' in n else n
+
+    owned = {stem(v) for v in globals().values()
+             if isinstance(v, pathlib.Path) and GEN in v.parents}
+    strays = []
+    for f in sorted(GEN.rglob('*')):
+        if f.is_dir() or f.name in ('PROVENANCE', 'README.md'):
+            continue
+        if stem(f) in owned:
+            continue
+        when = time.strftime('%Y-%m-%d %H:%M', time.localtime(f.stat().st_mtime))
+        strays.append(f'  {f.relative_to(GEN).as_posix():<26} {when}')
+    if not strays:
+        return 'Every file in generated/ is emitted by build.py.\n'
+    return ('This file answers for what build.py emits. These sit beside them\n'
+            'and it does not vouch for their pin:\n\n'
+            + '\n'.join(strays) + '\n')
+
+
 def main():
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     ap.add_argument('--force', action='store_true',
@@ -445,14 +485,9 @@ def main():
     else:
         intake += ['', 'no guest ran (every stage was already current)']
     (GEN / 'PROVENANCE').write_text(
-        'Nothing in generated/ is source; edit source/ and rebuild. This file\n'
-        'describes what build.py emits: ringplug*, codexzig-subject.codex,\n'
-        'codexzig.ir, codexzig.{qemu,native}.zig, arith.zig, intake/ and\n'
-        'local/codexzig. The codexir and codexcheck pair beside them --\n'
-        'their subjects, their .native.zig and local/{codexir,codexcheck} --\n'
-        'is emitted by build_codexir.py at whatever pin it last ran, which\n'
-        'is not necessarily this one. Those are gitignored and carry no\n'
-        'stamp of their own.\n\n'
+        'Nothing in generated/ is source; edit source/ and rebuild.\n\n'
+        + unowned()
+        + '\n'
         + '\n'.join(provenance + intake)
         + f'\n\nfixed point  {"HOLDS" if held else "BROKEN"}\n'
         + f'{SAMPLE.name:<12} {"MATCHES" if ran else "DIFFERS"} '
