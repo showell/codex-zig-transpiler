@@ -6212,7 +6212,7 @@ fn emit_load_from_handler_table(st0: CodegenState, addr: i64) EmitResult {
 }
 
 fn emit_name_nonlocal(st: CodegenState, name: []const u8, ty: CodexType) EmitResult {
-    return (if (cx_text_eq(name, "\x55\x55\x14\x0d\x0f\x1f\x49\x13\x0f\x21\x0d")) emit_heap_save_builtin(st) else (if (cx_text_eq(name, "\x55\x55\x13\x0d\x17\x1c\x49\x0e\x1e\x1f\x0d\x49\x16\x0d\x1c\x13")) emit_self_type_defs_builtin(st) else (if (cx_text_eq(name, "\x55\x55\x16\x0d\x18\x22\x49\x1f\x10\x13")) emit_deck_pos_builtin(st) else (if (cx_text_eq(name, "\x55\x55\x16\x0d\x18\x22\x49\x0d\x12\x0e\x0d\x15")) emit_deck_enter_builtin(st) else (if (cx_text_eq(name, "\x55\x55\x16\x0d\x18\x22\x49\x0d\x24\x11\x0e")) emit_deck_exit_builtin(st) else (if (cx_text_eq(name, "\x1d\x0d\x0e\x49\x13\x0e\x0f\x0e\x0d")) emit_get_state_builtin(st) else b6: { const resolved = resolve_to_sum_with_defs(st, ty); break :b6 switch (resolved.*) { .SumTy => |_p7| b7: { const ctors = _p7[2]; break :b7 b8: { const tag: i64 = find_ctor_tag(ctors, name, 0); break :b8 (if ((tag >= 0)) emit_nullary_ctor(st, tag) else emit_name_as_call(st, name)); }; }, .FunTy => |_p7| b7: { const rt = _p7[2]; break :b7 emit_partial_application(st, name, cx_ll_empty(IRExpr), (1 + fun_type_arity(rt))); }, else => (if (has_nullary_x86_builtin_emitter(st, name)) emit_builtin(st, name, cx_ll_empty(IRExpr)) else emit_name_as_call(st, name)),  }; }))))));
+    return (if (cx_text_eq(name, "\x55\x55\x14\x0d\x0f\x1f\x49\x13\x0f\x21\x0d")) emit_heap_save_builtin(st) else (if (cx_text_eq(name, "\x55\x55\x13\x0d\x17\x1c\x49\x0e\x1e\x1f\x0d\x49\x16\x0d\x1c\x13")) emit_self_type_defs_builtin(st) else (if (cx_text_eq(name, "\x55\x55\x16\x0d\x18\x22\x49\x1f\x10\x13")) emit_deck_pos_builtin(st) else (if (cx_text_eq(name, "\x55\x55\x16\x0d\x18\x22\x49\x0d\x12\x0e\x0d\x15")) emit_deck_enter_builtin(st) else (if (cx_text_eq(name, "\x55\x55\x16\x0d\x18\x22\x49\x0d\x24\x11\x0e")) emit_deck_exit_builtin(st) else (if (cx_text_eq(name, "\x1d\x0d\x0e\x49\x13\x0e\x0f\x0e\x0d")) emit_get_state_builtin(st) else b6: { const resolved = resolve_to_sum_with_defs(st, ty); break :b6 switch (resolved.*) { .SumTy => |_p7| b7: { const ctors = _p7[2]; break :b7 b8: { const tag: i64 = find_ctor_tag(ctors, name, 0); break :b8 (if ((tag >= 0)) emit_nullary_ctor(st, tag) else emit_name_as_call(st, name)); }; }, .FunTy => |_p7| b7: { const rt = _p7[2]; break :b7 b8: { const ua: i64 = lookup_x86_arity(st.user_arities, name); break :b8 emit_partial_application(st, name, cx_ll_empty(IRExpr), (if ((ua > 0)) ua else (1 + fun_type_arity(rt)))); }; }, else => (if (has_nullary_x86_builtin_emitter(st, name)) emit_builtin(st, name, cx_ll_empty(IRExpr)) else emit_name_as_call(st, name)),  }; }))))));
 }
 
 fn resolve_to_sum_with_defs(st: CodegenState, ty: CodexType) CodexType {
@@ -7185,7 +7185,7 @@ fn push_stack_args(st: CodegenState, arg_locals: *CxList(i64), i_: i64) CodegenS
 }
 
 fn emit_apply(st: CodegenState, func_expr: IRExpr, arg_expr: IRExpr, result_ty: CodexType) EmitResult {
-    return b0: { const saved_tail: bool = st.tco.in_tail_pos; break :b0 b1: { const full_expr = cx_new(IRExprS{ .IrApply = .{ func_expr, arg_expr, result_ty, ir_expr_span(func_expr) } }); break :b1 b2: { const r_ = (if (((st.tco.active and saved_tail) and is_self_call(full_expr, st.tco.current_func))) emit_tail_call(st, func_expr, arg_expr) else b4: { const flat = flatten_apply(func_expr, cx_ll_of(IRExpr, &[_]IRExpr{ arg_expr })); break :b4 (if (((st.deck_record_intrinsic and cx_text_eq(flat.func_name, "\x16\x0d\x18\x22\x49\x15\x0d\x18\x10\x15\x16")) and (cx_list_len(flat.args) == 1))) emit_deck_record_wrapper(st, flat.args) else (if (cx_text_eq(flat.func_name, "")) emit_indirect_call_value(st, get_apply_root(func_expr), flat.args) else b7: { const user_arity: i64 = lookup_x86_arity(st.user_arities, flat.func_name); break :b7 (if (((user_arity < 0) and is_builtin(st.builtin_names, flat.func_name))) emit_builtin(st, flat.func_name, flat.args) else (if ((((user_arity > 0) and (cx_list_len(flat.args) > user_arity)) and (lookup_local(st.locals, flat.func_name) < 0))) emit_over_apply(st, flat.func_name, flat.args, user_arity) else b10: { const resolved_result_ty = resolve_constructed_ty(st, result_ty); break :b10 switch (resolved_result_ty.*) { .SumTy => |_p11| b11: { const ctors = _p11[2]; break :b11 b12: { const tag: i64 = find_ctor_tag(ctors, flat.func_name, 0); break :b12 (if ((tag >= 0)) emit_sum_ctor(st, flat.args, cx_list_at(ctors, tag).fields, tag) else b14: { const is_local_sum: bool = (lookup_local(st.locals, flat.func_name) >= 0); break :b14 (if (is_local_sum) emit_indirect_call(st, flat) else emit_call_or_effect_op(st, flat, user_arity)); }); }; }, .UnitTy => |_p11| b11: { const uname = _p11[0]; break :b11 (if ((cx_text_eq(flat.func_name, uname.value) and (cx_list_len(flat.args) == 1))) emit_expr(st, cx_list_at(flat.args, 0)) else emit_direct_call(st, flat)); }, .FunTy => |_p11| b11: { const rt = _p11[2]; break :b11 b12: { const is_local: bool = (lookup_local(st.locals, flat.func_name) >= 0); break :b12 (if (is_local) emit_indirect_call(st, flat) else (if (((user_arity > 0) and (cx_list_len(flat.args) == user_arity))) emit_call_or_effect_op(st, flat, user_arity) else emit_partial_application(st, flat.func_name, flat.args, ((cx_list_len(flat.args) + 1) + fun_type_arity(rt))))); }; }, else => b12: { const is_local: bool = (lookup_local(st.locals, flat.func_name) >= 0); break :b12 (if (is_local) emit_indirect_call(st, flat) else emit_call_or_effect_op(st, flat, user_arity)); },  }; })); })); }); break :b2 cx_new(EmitResultS{ .state = st_set_tail_pos(fc_flush(r_.state), saved_tail), .reg = r_.reg }); }; }; };
+    return b0: { const saved_tail: bool = st.tco.in_tail_pos; break :b0 b1: { const full_expr = cx_new(IRExprS{ .IrApply = .{ func_expr, arg_expr, result_ty, ir_expr_span(func_expr) } }); break :b1 b2: { const r_ = (if (((st.tco.active and saved_tail) and is_self_call(full_expr, st.tco.current_func))) emit_tail_call(st, func_expr, arg_expr) else b4: { const flat = flatten_apply(func_expr, cx_ll_of(IRExpr, &[_]IRExpr{ arg_expr })); break :b4 (if (((st.deck_record_intrinsic and cx_text_eq(flat.func_name, "\x16\x0d\x18\x22\x49\x15\x0d\x18\x10\x15\x16")) and (cx_list_len(flat.args) == 1))) emit_deck_record_wrapper(st, flat.args) else (if (cx_text_eq(flat.func_name, "")) emit_indirect_call_value(st, get_apply_root(func_expr), flat.args) else b7: { const user_arity: i64 = lookup_x86_arity(st.user_arities, flat.func_name); break :b7 (if (((user_arity < 0) and is_builtin(st.builtin_names, flat.func_name))) emit_builtin(st, flat.func_name, flat.args) else (if ((((user_arity > 0) and (cx_list_len(flat.args) > user_arity)) and (lookup_local(st.locals, flat.func_name) < 0))) emit_over_apply(st, flat.func_name, flat.args, user_arity) else b10: { const resolved_result_ty = resolve_constructed_ty(st, result_ty); break :b10 switch (resolved_result_ty.*) { .SumTy => |_p11| b11: { const ctors = _p11[2]; break :b11 b12: { const tag: i64 = find_ctor_tag(ctors, flat.func_name, 0); break :b12 (if ((tag >= 0)) emit_sum_ctor(st, flat.args, cx_list_at(ctors, tag).fields, tag) else b14: { const is_local_sum: bool = (lookup_local(st.locals, flat.func_name) >= 0); break :b14 (if (is_local_sum) emit_indirect_call(st, flat) else emit_call_or_effect_op(st, flat, user_arity)); }); }; }, .UnitTy => |_p11| b11: { const uname = _p11[0]; break :b11 (if ((cx_text_eq(flat.func_name, uname.value) and (cx_list_len(flat.args) == 1))) emit_expr(st, cx_list_at(flat.args, 0)) else emit_direct_call(st, flat)); }, .FunTy => |_p11| b11: { const rt = _p11[2]; break :b11 b12: { const is_local: bool = (lookup_local(st.locals, flat.func_name) >= 0); break :b12 (if (is_local) emit_indirect_call(st, flat) else (if (((user_arity > 0) and (cx_list_len(flat.args) == user_arity))) emit_call_or_effect_op(st, flat, user_arity) else emit_partial_application(st, flat.func_name, flat.args, (if ((user_arity > 0)) user_arity else ((cx_list_len(flat.args) + 1) + fun_type_arity(rt)))))); }; }, else => b12: { const is_local: bool = (lookup_local(st.locals, flat.func_name) >= 0); break :b12 (if (is_local) emit_indirect_call(st, flat) else emit_call_or_effect_op(st, flat, user_arity)); },  }; })); })); }); break :b2 cx_new(EmitResultS{ .state = st_set_tail_pos(fc_flush(r_.state), saved_tail), .reg = r_.reg }); }; }; };
 }
 
 fn emit_direct_call(st: CodegenState, flat: FlatApply) EmitResult {
@@ -7503,7 +7503,23 @@ fn emit_trampoline_under_cases(st: CodegenState, c_: i64, m_: i64, r_: i64, offs
 }
 
 fn emit_one_trampoline(st: CodegenState, func_name: []const u8, c_: i64, total_arity: i64, offsets: *CxList(i64)) CodegenState {
-    return b0: { const r_: i64 = (total_arity - c_); break :b0 b1: { const st1 = (if ((r_ <= 1)) st else b3: { const sa = st_append_code(st, mov_load(reg_rax(), reg_rsp(), 8)); break :b3 emit_trampoline_under_cases(sa, c_, 1, r_, offsets, total_arity); }); break :b1 b2: { const st2 = emit_consume_arg_count(st1); break :b2 b3: { const st3 = emit_trampoline_shift_args(st2, 5, c_); break :b3 b4: { const st4 = emit_trampoline_load_captures(st3, 0, c_); break :b4 b5: { const st5 = emit_load_func_addr(st4, reg_rax(), func_name); break :b5 st_append_code(st5, cx_ll_of(i64, &[_]i64{ 255, 224 })); }; }; }; }; }; };
+    return b0: { const r_: i64 = (total_arity - c_); break :b0 b1: { const sa = st_append_code(st, mov_load(reg_rax(), reg_rsp(), 8)); break :b1 b2: { const st1 = (if ((r_ <= 1)) sa else emit_trampoline_under_cases(sa, c_, 1, r_, offsets, total_arity)); break :b2 b3: { const st1b = emit_trampoline_over_dynamic(st1, func_name, c_, r_); break :b3 b4: { const st2 = emit_consume_arg_count(st1b); break :b4 b5: { const st3 = emit_trampoline_shift_args(st2, 5, c_); break :b5 b6: { const st4 = emit_trampoline_load_captures(st3, 0, c_); break :b6 b7: { const st5 = emit_load_func_addr(st4, reg_rax(), func_name); break :b7 st_append_code(st5, cx_ll_of(i64, &[_]i64{ 255, 224 })); }; }; }; }; }; }; }; };
+}
+
+fn emit_over_push_extras(st: CodegenState, i_: i64, lo: i64) CodegenState {
+    var _tl_st = st;
+    var _tl_i = i_;
+    while (true) {
+        if ((_tl_i < lo)) { return _tl_st; } else { { const _tj1_0 = st_append_code(_tl_st, push_r(cx_list_at(arg_regs(), _tl_i))); const _tj1_1 = (_tl_i - 1); _tl_st = _tj1_0; _tl_i = _tj1_1; continue; } }
+    }
+}
+
+fn emit_trampoline_over_dynamic(st: CodegenState, func_name: []const u8, c_: i64, r_: i64) CodegenState {
+    return (if ((r_ >= 6)) st else b1: { const st1 = st_append_code(st, cmp_ri(reg_rax(), r_)); break :b1 b2: { const low: i64 = st1.code_len; break :b2 b3: { const st2 = st_append_code(st1, jcc(cc_le(), 0)); break :b3 b4: { const st3 = st_append_code(st2, cmp_ri(reg_rax(), 6)); break :b4 b5: { const high: i64 = st3.code_len; break :b5 b6: { const st4 = st_append_code(st3, jcc(cc_g(), 0)); break :b6 b7: { const st5 = st_append_code(st4, mov_rr(reg_r10(), reg_rax())); break :b7 b8: { const st6 = st_append_code(st5, sub_ri(reg_r10(), r_)); break :b8 b9: { const st7 = emit_consume_arg_count(st6); break :b9 b10: { const st8 = emit_over_push_extras(st7, 5, r_); break :b10 b11: { const st9 = emit_trampoline_shift_args(st8, 5, c_); break :b11 b12: { const st10 = emit_trampoline_load_captures(st9, 0, c_); break :b12 b13: { const st11 = st_append_code(st10, mov_rr(reg_rax(), reg_rsp())); break :b13 b14: { const st12 = st_append_code(st11, push_r(reg_rax())); break :b14 b15: { const st13 = st_append_code(st12, push_r(reg_r10())); break :b15 b16: { const st14 = emit_load_func_addr(st13, reg_rax(), func_name); break :b16 b17: { const st15 = st_append_code(st14, cx_ll_of(i64, &[_]i64{ 255, 208 })); break :b17 b18: { const st16 = emit_over_apply_loop(st15, r_); break :b18 b19: { const st17 = patch_jcc_at(st16, low, st16.code_len); break :b19 patch_jcc_at(st17, high, st16.code_len); }; }; }; }; }; }; }; }; }; }; }; }; }; }; }; }; }; }; });
+}
+
+fn emit_over_apply_loop(st: CodegenState, r_: i64) CodegenState {
+    return b0: { const top_: i64 = st.code_len; break :b0 b1: { const st1 = st_append_code(st, mov_load(reg_r11(), reg_rsp(), 0)); break :b1 b2: { const st2 = st_append_code(st1, cmp_ri(reg_r11(), 0)); break :b2 b3: { const ex: i64 = st2.code_len; break :b3 b4: { const st3 = st_append_code(st2, jcc(cc_e(), 0)); break :b4 b5: { const st4 = st_append_code(st3, sub_ri(reg_r11(), 1)); break :b5 b6: { const st5 = st_append_code(st4, mov_store(reg_rsp(), reg_r11(), 0)); break :b6 b7: { const st6 = st_append_code(st5, mov_load(reg_r11(), reg_rsp(), 8)); break :b7 b8: { const st7 = st_append_code(st6, mov_load(reg_rdi(), reg_r11(), 0)); break :b8 b9: { const st8 = st_append_code(st7, add_ri(reg_r11(), 8)); break :b9 b10: { const st9 = st_append_code(st8, mov_store(reg_rsp(), reg_r11(), 8)); break :b10 b11: { const st10 = st_append_code(st9, mov_rr(reg_r11(), reg_rax())); break :b11 b12: { const st11 = st_append_code(st10, mov_load(reg_rax(), reg_r11(), 0)); break :b12 b13: { const st12 = st_append_code(st11, push_i32(1)); break :b13 b14: { const st13 = st_append_code(st12, cx_ll_of(i64, &[_]i64{ 255, 208 })); break :b14 b15: { const st14 = st_append_code(st13, jmp((top_ - (st13.code_len + 5)))); break :b15 b16: { const st15 = patch_jcc_at(st14, ex, st14.code_len); break :b16 b17: { const st16 = st_append_code(st15, add_ri(reg_rsp(), (16 + ((6 - r_) * 8)))); break :b17 st_append_code(st16, x86_ret()); }; }; }; }; }; }; }; }; }; }; }; }; }; }; }; }; }; };
 }
 
 fn emit_trampoline_family(st: CodegenState, func_name: []const u8, c_: i64, num_captures: i64, total_arity: i64, offsets: *CxList(i64)) TrampFamily {
@@ -8534,6 +8550,10 @@ fn cdx_field_on_unit_type() i64 {
 
 fn cdx_unreachable_match_arm() i64 {
     return 2096;
+}
+
+fn cdx_partial_application_unused() i64 {
+    return 2097;
 }
 
 fn cdx_non_exhaustive_match() i64 {
@@ -16694,7 +16714,102 @@ fn infer_if(st: UnificationState, env: TypeEnv, cond: AExpr, then_e: AExpr, else
 }
 
 fn infer_let(st: UnificationState, env: TypeEnv, bindings: *CxList(ALetBind), body: AExpr, depth: i64) CheckResult {
-    return b0: { const env2 = infer_let_bindings(st, env, bindings, 0, cx_list_len(bindings), empty_row(), depth); break :b0 b1: { const br = infer_expr_at(env2.state, env2.env, body, (depth + 1)); break :b1 switch (row_union(br.state, env2.binds_row, br.effect_row)) { .MkTup2 => |_p2| b2: { const amb = _p2[0]; const amb_st = _p2[1]; break :b2 cx_new(CheckResultS{ .inferred_type = br.inferred_type, .effect_row = amb, .state = amb_st }); },  }; }; };
+    return b0: { const env2 = infer_let_bindings(st, env, bindings, 0, cx_list_len(bindings), empty_row(), depth); break :b0 b1: { const br = infer_expr_at(env2.state, env2.env, body, (depth + 1)); break :b1 switch (row_union(br.state, env2.binds_row, br.effect_row)) { .MkTup2 => |_p2| b2: { const amb = _p2[0]; const amb_st = _p2[1]; break :b2 b3: { const warned_st = warn_unused_partials(amb_st, env2.env, bindings, body, 0, cx_list_len(bindings)); break :b3 cx_new(CheckResultS{ .inferred_type = br.inferred_type, .effect_row = amb, .state = warned_st }); }; },  }; }; };
+}
+
+fn warn_unused_partials(st: UnificationState, env: TypeEnv, bindings: *CxList(ALetBind), body: AExpr, i_: i64, len_: i64) UnificationState {
+    var _tl_st = st;
+    var _tl_i = i_;
+    while (true) {
+        if ((_tl_i >= len_)) { return _tl_st; } else { { const _tj1_0 = warn_one_partial(_tl_st, env, bindings, body, _tl_i, len_, false); const _tj1_4 = (_tl_i + 1); _tl_st = _tj1_0; _tl_i = _tj1_4; continue; } }
+    }
+}
+
+fn warn_unused_partials_act(st: UnificationState, env: TypeEnv, bindings: *CxList(ALetBind), body: AExpr, stmts: *CxList(AActStmt), si: i64, slen: i64, i_: i64, len_: i64) UnificationState {
+    var _tl_st = st;
+    var _tl_i = i_;
+    while (true) {
+        if ((_tl_i >= len_)) { return _tl_st; } else { const used_after: bool = uses_name_in_stmts(stmts, si, slen, cx_list_at(bindings, _tl_i).name.value); const st2 = warn_one_partial(_tl_st, env, bindings, body, _tl_i, len_, used_after); { const _tj3_0 = st2; const _tj3_7 = (_tl_i + 1); _tl_st = _tj3_0; _tl_i = _tj3_7; continue; } }
+    }
+}
+
+fn warn_one_partial(st: UnificationState, env: TypeEnv, bindings: *CxList(ALetBind), body: AExpr, i_: i64, len_: i64, used_after: bool) UnificationState {
+    return b0: { const b_ = cx_list_at(bindings, i_); break :b0 b1: { const nm = b_.name.value; break :b1 b2: { const head = partial_apply_head_name(b_.value); break :b2 (if (cx_text_eq(head, "")) st else (if (cx_text_eq(head, nm)) st else (if (used_after) st else (if ((bind_name_count(bindings, nm, 0, len_) > 1)) st else (if (is_fun_ty(env_lookup(env, nm))) (if (uses_name_in_binds(bindings, (i_ + 1), len_, nm)) st else (if (aexpr_uses_name(body, nm)) st else b10: { const _r10 = st; _r10.bag = bag_add(st.bag, make_warning(cdx_partial_application_unused(), cx_concat(cx_concat(cx_concat(cx_concat(cx_concat(cx_concat("\x47", nm), "\x47\x02\x11\x13\x02\x20\x10\x19\x12\x16\x02\x0e\x10\x02\x0f\x02\x1f\x0f\x15\x0e\x11\x0f\x17\x02\x0f\x1f\x1f\x17\x11\x18\x0f\x0e\x11\x10\x12\x02\x10\x1c\x02\x47"), head), "\x47\x02\x0f\x12\x16\x02\x12\x10\x0e\x14\x11\x12\x1d\x02\x15\x0d\x0f\x16\x13\x02\x47"), nm), "\x47\x42\x02\x13\x10\x02\x0e\x14\x0d\x02\x18\x0f\x17\x17\x02\x11\x13\x02\x12\x0d\x21\x0d\x15\x02\x18\x10\x1a\x1f\x17\x0d\x0e\x0d\x16\x02\x0f\x12\x16\x02\x11\x0e\x13\x02\x0d\x1c\x1c\x0d\x18\x0e\x13\x02\x12\x0d\x21\x0d\x15\x02\x14\x0f\x1f\x1f\x0d\x12\x41\x02\x2d\x19\x1f\x1f\x17\x1e\x02\x0e\x14\x0d\x02\x1a\x11\x13\x13\x11\x12\x1d\x02\x0f\x15\x1d\x19\x1a\x0d\x12\x0e\x13\x42\x02\x10\x15\x02\x16\x15\x10\x1f\x02\x0e\x14\x0d\x02\x20\x11\x12\x16\x11\x12\x1d\x41"), b_.span)); break :b10 _r10; })) else st))))); }; }; };
+}
+
+fn is_fun_ty(t: CodexType) bool {
+    return switch (t.*) { .FunTy => true, else => false,  };
+}
+
+fn partial_apply_head_name(e_: AExpr) []const u8 {
+    return switch (e_.*) { .AApplyExpr => |_p0| b0: { const f = _p0[0]; break :b0 apply_spine_head_name(f); }, else => "",  };
+}
+
+fn apply_spine_head_name(e_: AExpr) []const u8 {
+    var _tl_e = e_;
+    while (true) {
+        switch (_tl_e.*) { .AApplyExpr => |_p0| { const f = _p0[0]; { const _tj1_0 = f; _tl_e = _tj1_0; continue; } }, .ANameExpr => |_p0| { const n_ = _p0[0]; return n_.value; }, else => { return ""; },  }
+    }
+}
+
+fn bind_name_count(binds: *CxList(ALetBind), target: []const u8, i_: i64, len_: i64) i64 {
+    var _tl_i = i_;
+    while (true) {
+        if ((_tl_i >= len_)) { return 0; } else { if (cx_text_eq(cx_list_at(binds, _tl_i).name.value, target)) { return (1 + bind_name_count(binds, target, (_tl_i + 1), len_)); } else { { const _tj2_2 = (_tl_i + 1); _tl_i = _tj2_2; continue; } } }
+    }
+}
+
+fn aexpr_uses_name(e_: AExpr, target: []const u8) bool {
+    var _tl_e = e_;
+    while (true) {
+        switch (_tl_e.*) { .ALitExpr => { return false; }, .ANameExpr => |_p0| { const n_ = _p0[0]; return cx_text_eq(n_.value, target); }, .AApplyExpr => |_p0| { const f = _p0[0]; const a_ = _p0[1]; return (aexpr_uses_name(f, target) or aexpr_uses_name(a_, target)); }, .ABinaryExpr => |_p0| { const l_ = _p0[0]; const r_ = _p0[2]; return (aexpr_uses_name(l_, target) or aexpr_uses_name(r_, target)); }, .AUnaryExpr => |_p0| { const x = _p0[0]; { const _tj1_0 = x; _tl_e = _tj1_0; continue; } }, .AIfExpr => |_p0| { const c_ = _p0[0]; const tb = _p0[1]; const el = _p0[2]; return ((aexpr_uses_name(c_, target) or aexpr_uses_name(tb, target)) or aexpr_uses_name(el, target)); }, .ALetExpr => |_p0| { const binds = _p0[0]; const lbody = _p0[1]; return (uses_name_in_binds(binds, 0, cx_list_len(binds), target) or aexpr_uses_name(lbody, target)); }, .ALambdaExpr => |_p0| { const lbody = _p0[1]; { const _tj1_0 = lbody; _tl_e = _tj1_0; continue; } }, .AMatchExpr => |_p0| { const scrut = _p0[0]; const arms = _p0[1]; return (aexpr_uses_name(scrut, target) or uses_name_in_arms(arms, 0, cx_list_len(arms), target)); }, .AListExpr => |_p0| { const es = _p0[0]; return uses_name_in_exprs(es, 0, cx_list_len(es), target); }, .ARecordExpr => |_p0| { const fs = _p0[1]; return uses_name_in_fields(fs, 0, cx_list_len(fs), target); }, .AFieldAccess => |_p0| { const r_ = _p0[0]; { const _tj1_0 = r_; _tl_e = _tj1_0; continue; } }, .AActExpr => |_p0| { const ss = _p0[0]; return uses_name_in_stmts(ss, 0, cx_list_len(ss), target); }, .AHandleExpr => |_p0| { const hb = _p0[1]; const cs = _p0[2]; return (aexpr_uses_name(hb, target) or uses_name_in_clauses(cs, 0, cx_list_len(cs), target)); }, .AWithTimeoutExpr => |_p0| { const wb = _p0[3]; { const _tj1_0 = wb; _tl_e = _tj1_0; continue; } }, .ATryExpr => |_p0| { const tb = _p0[1]; const fb = _p0[2]; const fl = _p0[3]; return ((uses_name_in_stmts(tb, 0, cx_list_len(tb), target) or uses_name_in_stmts(fb, 0, cx_list_len(fb), target)) or uses_name_in_stmts(fl, 0, cx_list_len(fl), target)); }, .AFieldAssignExpr => |_p0| { const r_ = _p0[0]; const v_ = _p0[2]; return (aexpr_uses_name(r_, target) or aexpr_uses_name(v_, target)); }, .ALazyExpr => |_p0| { const inner = _p0[0]; { const _tj1_0 = inner; _tl_e = _tj1_0; continue; } }, .AErrorExpr => { return false; }, .AInductionExpr => |_p0| { const sc = _p0[0]; const arms = _p0[1]; return (aexpr_uses_name(sc, target) or uses_name_in_arms(arms, 0, cx_list_len(arms), target)); },  }
+    }
+}
+
+fn uses_name_in_binds(binds: *CxList(ALetBind), i_: i64, len_: i64, target: []const u8) bool {
+    var _tl_i = i_;
+    while (true) {
+        if ((_tl_i >= len_)) { return false; } else { if (aexpr_uses_name(cx_list_at(binds, _tl_i).value, target)) { return true; } else { { const _tj2_1 = (_tl_i + 1); _tl_i = _tj2_1; continue; } } }
+    }
+}
+
+fn uses_name_in_exprs(es: *CxList(AExpr), i_: i64, len_: i64, target: []const u8) bool {
+    var _tl_i = i_;
+    while (true) {
+        if ((_tl_i >= len_)) { return false; } else { if (aexpr_uses_name(cx_list_at(es, _tl_i), target)) { return true; } else { { const _tj2_1 = (_tl_i + 1); _tl_i = _tj2_1; continue; } } }
+    }
+}
+
+fn uses_name_in_arms(arms: *CxList(AMatchArm), i_: i64, len_: i64, target: []const u8) bool {
+    var _tl_i = i_;
+    while (true) {
+        if ((_tl_i >= len_)) { return false; } else { const a_ = cx_list_at(arms, _tl_i); if (aexpr_uses_name(a_.guard, target)) { return true; } else { if (aexpr_uses_name(a_.body, target)) { return true; } else { { const _tj4_1 = (_tl_i + 1); _tl_i = _tj4_1; continue; } } } }
+    }
+}
+
+fn uses_name_in_fields(fs: *CxList(AFieldExpr), i_: i64, len_: i64, target: []const u8) bool {
+    var _tl_i = i_;
+    while (true) {
+        if ((_tl_i >= len_)) { return false; } else { if (aexpr_uses_name(cx_list_at(fs, _tl_i).value, target)) { return true; } else { { const _tj2_1 = (_tl_i + 1); _tl_i = _tj2_1; continue; } } }
+    }
+}
+
+fn uses_name_in_stmts(ss: *CxList(AActStmt), i_: i64, len_: i64, target: []const u8) bool {
+    var _tl_i = i_;
+    while (true) {
+        if ((_tl_i >= len_)) { return false; } else { if (stmt_uses_name(cx_list_at(ss, _tl_i), target)) { return true; } else { { const _tj2_1 = (_tl_i + 1); _tl_i = _tj2_1; continue; } } }
+    }
+}
+
+fn stmt_uses_name(s_: AActStmt, target: []const u8) bool {
+    return switch (s_.*) { .AActBindStmt => |_p0| b0: { const v_ = _p0[1]; break :b0 aexpr_uses_name(v_, target); }, .AActExprStmt => |_p0| b0: { const v_ = _p0[0]; break :b0 aexpr_uses_name(v_, target); },  };
+}
+
+fn uses_name_in_clauses(cs: *CxList(AHandleClause), i_: i64, len_: i64, target: []const u8) bool {
+    var _tl_i = i_;
+    while (true) {
+        if ((_tl_i >= len_)) { return false; } else { if (aexpr_uses_name(cx_list_at(cs, _tl_i).body, target)) { return true; } else { { const _tj2_1 = (_tl_i + 1); _tl_i = _tj2_1; continue; } } }
+    }
 }
 
 fn infer_let_bindings(st: UnificationState, env: TypeEnv, bindings: *CxList(ALetBind), i_: i64, len_: i64, acc_row: EffectRow, depth: i64) LetInferResult {
@@ -17224,7 +17339,7 @@ fn infer_act_let(st: UnificationState, env: TypeEnv, binds: *CxList(ALetBind), b
     var _tl_acc_row = acc_row;
     var _tl_depth = depth;
     while (true) {
-        const lr = infer_let_bindings(_tl_st, _tl_env, _tl_binds, 0, cx_list_len(_tl_binds), empty_row(), _tl_depth); switch (row_union(lr.state, _tl_acc_row, lr.binds_row)) { .MkTup2 => |_p1| { const acc2 = _p1[0]; const acc_st = _p1[1]; switch (_tl_body.*) { .ALetExpr => |_p2| { const binds2 = _p2[0]; const body2 = _p2[1]; { const _tj3_0 = acc_st; const _tj3_1 = lr.env; const _tj3_2 = binds2; const _tj3_3 = body2; const _tj3_7 = acc2; const _tj3_8 = (_tl_depth + 1); _tl_st = _tj3_0; _tl_env = _tj3_1; _tl_binds = _tj3_2; _tl_body = _tj3_3; _tl_acc_row = _tj3_7; _tl_depth = _tj3_8; continue; } }, else => { const br = infer_expr_at(acc_st, lr.env, _tl_body, (_tl_depth + 1)); switch (row_union(br.state, acc2, br.effect_row)) { .MkTup2 => |_p4| { const acc3 = _p4[0]; const acc_st2 = _p4[1]; return infer_act_loop(acc_st2, lr.env, stmts, (i_ + 1), len_, br.inferred_type, acc3, _tl_depth); },  } },  } },  }
+        const lr = infer_let_bindings(_tl_st, _tl_env, _tl_binds, 0, cx_list_len(_tl_binds), empty_row(), _tl_depth); switch (row_union(lr.state, _tl_acc_row, lr.binds_row)) { .MkTup2 => |_p1| { const acc2 = _p1[0]; const acc_st = _p1[1]; const warned_st = warn_unused_partials_act(acc_st, lr.env, _tl_binds, _tl_body, stmts, (i_ + 1), len_, 0, cx_list_len(_tl_binds)); switch (_tl_body.*) { .ALetExpr => |_p3| { const binds2 = _p3[0]; const body2 = _p3[1]; { const _tj4_0 = warned_st; const _tj4_1 = lr.env; const _tj4_2 = binds2; const _tj4_3 = body2; const _tj4_7 = acc2; const _tj4_8 = (_tl_depth + 1); _tl_st = _tj4_0; _tl_env = _tj4_1; _tl_binds = _tj4_2; _tl_body = _tj4_3; _tl_acc_row = _tj4_7; _tl_depth = _tj4_8; continue; } }, else => { const br = infer_expr_at(warned_st, lr.env, _tl_body, (_tl_depth + 1)); switch (row_union(br.state, acc2, br.effect_row)) { .MkTup2 => |_p5| { const acc3 = _p5[0]; const acc_st2 = _p5[1]; return infer_act_loop(acc_st2, lr.env, stmts, (i_ + 1), len_, br.inferred_type, acc3, _tl_depth); },  } },  } },  }
     }
 }
 
@@ -17270,7 +17385,7 @@ fn is_record_set_head(e_: AExpr) bool {
 fn later_field_reads_name(fields: *CxList(AFieldExpr), i_: i64, len_: i64, target: []const u8) bool {
     var _tl_i = i_;
     while (true) {
-        if ((_tl_i >= len_)) { return false; } else { if (aexpr_mentions_name(cx_list_at(fields, _tl_i).value, target)) { return true; } else { { const _tj2_1 = (_tl_i + 1); _tl_i = _tj2_1; continue; } } }
+        if ((_tl_i >= len_)) { return false; } else { if (aexpr_uses_name(cx_list_at(fields, _tl_i).value, target)) { return true; } else { { const _tj2_1 = (_tl_i + 1); _tl_i = _tj2_1; continue; } } }
     }
 }
 
@@ -17283,20 +17398,6 @@ fn record_set_target(e_: AExpr) []const u8 {
 
 fn aexpr_plain_name(e_: AExpr) []const u8 {
     return switch (e_.*) { .ANameExpr => |_p0| b0: { const n_ = _p0[0]; break :b0 n_.value; }, else => "",  };
-}
-
-fn aexpr_mentions_name(e_: AExpr, target: []const u8) bool {
-    var _tl_e = e_;
-    while (true) {
-        switch (_tl_e.*) { .ANameExpr => |_p0| { const n_ = _p0[0]; return cx_text_eq(n_.value, target); }, .AApplyExpr => |_p0| { const f = _p0[0]; const a_ = _p0[1]; return (aexpr_mentions_name(f, target) or aexpr_mentions_name(a_, target)); }, .ABinaryExpr => |_p0| { const l_ = _p0[0]; const r_ = _p0[2]; return (aexpr_mentions_name(l_, target) or aexpr_mentions_name(r_, target)); }, .AIfExpr => |_p0| { const c_ = _p0[0]; const t = _p0[1]; const el = _p0[2]; return ((aexpr_mentions_name(c_, target) or aexpr_mentions_name(t, target)) or aexpr_mentions_name(el, target)); }, .ALetExpr => |_p0| { const binds = _p0[0]; const body = _p0[1]; return (aexpr_mentions_name(body, target) or binds_mention_name(binds, 0, cx_list_len(binds), target)); }, .AMatchExpr => |_p0| { const scrut = _p0[0]; { const _tj1_0 = scrut; _tl_e = _tj1_0; continue; } }, .AFieldAccess => |_p0| { const obj = _p0[0]; { const _tj1_0 = obj; _tl_e = _tj1_0; continue; } }, else => { return false; },  }
-    }
-}
-
-fn binds_mention_name(binds: *CxList(ALetBind), i_: i64, len_: i64, target: []const u8) bool {
-    var _tl_i = i_;
-    while (true) {
-        if ((_tl_i >= len_)) { return false; } else { if (aexpr_mentions_name(cx_list_at(binds, _tl_i).value, target)) { return true; } else { { const _tj2_1 = (_tl_i + 1); _tl_i = _tj2_1; continue; } } }
-    }
 }
 
 fn aexpr_mentions_record_set(e_: AExpr) bool {
@@ -17405,7 +17506,11 @@ fn lookup_type_split(overlay: LookupOverlay, base_: *CxList(TypeBinding), name: 
 }
 
 fn compare_binding_names(a_: TypeBinding, b_: TypeBinding) i64 {
-    return cx_text_compare(a_.name, b_.name);
+    return b0: { const by_name: i64 = cx_text_compare(a_.name, b_.name); break :b0 (if ((by_name != 0)) by_name else (binding_shape_rank(a_.bound_type) - binding_shape_rank(b_.bound_type))); };
+}
+
+fn binding_shape_rank(ty: CodexType) i64 {
+    return @as(i64, switch (ty.*) { .SumTy => 0, .RecordTy => 0, .ForAllTy => 2, .ForAllEff => 2, else => 1,  });
 }
 
 fn sort_bindings(xs: *CxList(TypeBinding)) *CxList(TypeBinding) {

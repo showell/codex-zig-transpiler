@@ -13,9 +13,9 @@ and it does not vouch for their pin:
   local/codexir              2026-09-08 22:33
   local/codexir.fp           2026-09-08 22:33
 
-checkout   /home/steve/showell_repos/cobblestone-u57
-           e941ba11  zig plug: the boxing comment states the rule, not how it was found
-seed       Codex.cdx  3217563 bytes
+checkout   /home/steve/showell_repos/cobblestone-u58
+           8570fba1  zig plug: the boxing comment states the rule, not how it was found
+seed       Codex.cdx  3322781 bytes
 zig        0.16.0
 qemu       QEMU emulator version 8.2.2 (Debian 1:8.2.2+ds-0ubuntu1.18)
 pwsh       PowerShell 7.5.4
@@ -24,15 +24,15 @@ guest      accel=tcg  mem=3072MB
 what each guest was actually handed (intake/):
 
   ringplug-source.codex.blob          390571 bytes   mode 'CDX map'
-  codexzig-subject.codex.blob        3479037 bytes   mode 'IR-CCE decks=172'
-  codexzig.ir.blob                  12109027 bytes   mode 'RING zig'
+  codexzig-subject.codex.blob        3487992 bytes   mode 'IR-CCE decks=172'
+  codexzig.ir.blob                  12167602 bytes   mode 'RING zig'
 
 what each guest touched of its cap:
 
   ringplug.cdx                       402 MB of 3072 MB
-  codexzig.ir                        713 MB of 3072 MB
-  codexzig.qemu.zig.cce             1324 MB of 3072 MB
+  codexzig.ir                        712 MB of 3072 MB
+  codexzig.qemu.zig.cce             1330 MB of 3072 MB
 
 fixed point  HOLDS
 arith.codex  MATCHES arith.expected
-built in     481s
+built in     494s
