@@ -2,8 +2,8 @@ codexir and codexcheck -- the oracles rust-codex-compiler is graded
 against, and codexcheck-subject.codex, the source it ports from.
 Emitted by build_codexir.py, not by build.py.
 
-built      2026-09-08T22:34:28Z
-checkout   /home/steve/showell_repos/cobblestone-u57
-           e941ba11  zig plug: the boxing comment states the rule, not how it was found
-subject    ecfb2ff9af350393  codexzig-subject.codex
-codexzig   6512a08b0454f609  the transpiler that emitted them
+built      2026-09-09T01:41:00Z
+checkout   /home/steve/showell_repos/cobblestone-u58
+           8570fba1  zig plug: the boxing comment states the rule, not how it was found
+subject    ab2af30213ac26f4  codexzig-subject.codex
+codexzig   65165823744c9838  the transpiler that emitted them
