@@ -3,19 +3,11 @@ Nothing in generated/ is source; edit source/ and rebuild.
 This file answers for what build.py emits. These sit beside them
 and it does not vouch for their pin:
 
-  PROVENANCE.oracles         2026-09-08 22:45
-  codexcheck-subject.codex   2026-09-08 22:33
-  codexcheck.native.zig      2026-09-08 22:34
-  codexir-subject.codex      2026-09-08 22:32
-  codexir.native.zig         2026-09-08 22:33
-  local/codexcheck           2026-09-08 22:34
-  local/codexcheck.fp        2026-09-08 22:34
-  local/codexir              2026-09-08 22:33
-  local/codexir.fp           2026-09-08 22:33
+  PROVENANCE.oracles         2026-09-13 14:59
 
-checkout   /home/steve/showell_repos/cobblestone-u58
-           8570fba1  zig plug: the boxing comment states the rule, not how it was found
-seed       Codex.cdx  3322781 bytes
+checkout   /home/steve/showell_repos/cobblestone-u60rel
+           9fff850c  Update 60, native nested patterns, declared exports as native roots, concrete generic equa
+seed       Codex.cdx  3394819 bytes
 zig        0.16.0
 qemu       QEMU emulator version 8.2.2 (Debian 1:8.2.2+ds-0ubuntu1.18)
 pwsh       PowerShell 7.5.4
@@ -23,16 +15,16 @@ guest      accel=tcg  mem=3072MB
 
 what each guest was actually handed (intake/):
 
-  ringplug-source.codex.blob          390571 bytes   mode 'CDX map'
-  codexzig-subject.codex.blob        3487992 bytes   mode 'IR-CCE decks=172'
-  codexzig.ir.blob                  12167602 bytes   mode 'RING zig'
+  ringplug-source.codex.blob          403585 bytes   mode 'CDX map'
+  codexzig-subject.codex.blob        3534911 bytes   mode 'IR-CCE decks=172'
+  codexzig.ir.blob                  12303837 bytes   mode 'RING zig'
 
 what each guest touched of its cap:
 
-  ringplug.cdx                       402 MB of 3072 MB
-  codexzig.ir                        712 MB of 3072 MB
-  codexzig.qemu.zig.cce             1330 MB of 3072 MB
+  ringplug.cdx                       406 MB of 3072 MB
+  codexzig.ir                        721 MB of 3072 MB
+  codexzig.qemu.zig.cce             1347 MB of 3072 MB
 
 fixed point  HOLDS
 arith.codex  MATCHES arith.expected
-built in     494s
+built in     506s
