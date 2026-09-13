@@ -268,20 +268,27 @@ var cx_deck_top: i64 = 0;
 var cx_deck_best: i64 = 0;
 var cx_deck_stride: i64 = 0;
 var cx_deck_armed: bool = false;
-// STDOUT, never stderr. stderr carries the program's output and every
-// comparison in the ladder diffs it, so a measurement written there would
-// corrupt the thing being measured. Raw write syscall rather than
-// std.Io.File, which in 0.16 wants an Io instance. Only on a new peak, so the
-// lines are few and the last one is the answer.
+// Where cx_deck_report writes: 3 when the caller opened fd 3
+// (`prog 3> deck.log`), -1 when it did not, -2 until the first cx_deck_set
+// asks. Asked once, at that first arming: the prelude's one openat closes
+// before it returns, so an fd 3 open then was inherited, and while it stays
+// open nothing the program opens is numbered 3.
+var cx_deck_fd: i32 = -2;
+// To fd 3, and only when the caller opened it (cx_deck_fd): stdout carries
+// the compilers' notices and stderr the program's output, and readers compare
+// both. Raw write syscall rather than std.Io.File, which in 0.16 wants an Io
+// instance. Only on a new peak, so the lines are few and the last one is the
+// answer.
 fn cx_deck_report() void {
     if (@import("builtin").os.tag != .linux) return;
+    if (cx_deck_fd < 0) return;
     if (cx_deck_base == 0 or cx_deck_top == 0) return;
     const cx_used = cx_deck_hw - cx_deck_base;
     if (cx_used - cx_deck_stride < 1048576) return;
     cx_deck_stride = cx_used;
     var cx_b: [224]u8 = undefined;
     const cx_s = std.fmt.bufPrint(&cx_b, "CX-DECK used={d} reserved={d} headroom={d} base={d} peak={d} best={d}\n", .{ cx_used, cx_deck_top - cx_deck_base, cx_deck_top - cx_deck_hw, cx_deck_base, cx_deck_hw, cx_deck_best }) catch return;
-    _ = std.os.linux.write(1, cx_s.ptr, cx_s.len);
+    _ = std.os.linux.write(cx_deck_fd, cx_s.ptr, cx_s.len);
 }
 fn cx_new(v: anytype) *@TypeOf(v) {
     const p = cx_gpa.create(@TypeOf(v)) catch @panic("oom");
