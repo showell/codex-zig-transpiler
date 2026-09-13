@@ -243,6 +243,7 @@ def receipt():
         'built      ' + time.strftime('%Y-%m-%dT%H:%M:%SZ', time.gmtime()) + '\n'
         + '\n'.join(pin) + '\n'
         f'subject    {sha(SUBJECT)[:16]}  {SUBJECT.name}\n'
+        f'ir-subject {sha(IR_SUBJECT)[:16]}  {IR_SUBJECT.name}, the source codexir is built from\n'
         f'codexzig   {sha(CODEXZIG)[:16]}  the transpiler that emitted them\n')
     say(f'wrote {(GEN / "PROVENANCE.oracles").name}')
 

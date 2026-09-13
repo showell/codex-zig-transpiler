@@ -6,4 +6,5 @@ built      2026-09-13T15:32:42Z
 checkout   /home/steve/showell_repos/cobblestone-u60rel
            9fff850c  Update 60, native nested patterns, declared exports as native roots, concrete generic equa
 subject    2f6bc22de473ea0c  codexzig-subject.codex
+ir-subject 409c58cc1d9fae66  codexir-subject.codex, the source codexir is built from
 codexzig   8169dac4b831adaa  the transpiler that emitted them
