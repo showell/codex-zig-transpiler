@@ -112,6 +112,12 @@ is that source wrapped in the guest's intake envelope, and the envelope is
 what makes QEMU answer with IR text rather than an x86 binary; the native
 binary reads plain Codex on stdin and would choke on the mode line.
 
+That source is the *unit*: the bundle with what the checkout's
+`build/compile.ps1` would resolve ahead of it, which for a complete bundle is
+Foreword ListUtils and Tuple, because `for` desugars to `map-list` and a tuple
+to `MkTup<N>`. It is written into the bundled file itself, so both passes read
+it.
+
 ## Requirements
 
 | | | why |

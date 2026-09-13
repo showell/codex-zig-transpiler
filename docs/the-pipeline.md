@@ -27,6 +27,12 @@ printing its own input would satisfy it. So a small program with a known
 answer goes through the real artifact, and its output is checked line for
 line.
 
+Stages 1 and 3 each end by resolving the bundle into the unit.
+`source/resolve_unit.ps1` puts ahead of it what the checkout's
+`build/compile.ps1` would: the chapters its cite resolver adds, which for a
+complete bundle are Foreword ListUtils and Tuple, because `for` desugars to
+`map-list` and a tuple to `MkTup<N>`. The file named above is that unit.
+
 Each guest is handed a blob from `generated/intake/`: the file named above it,
 wrapped in a mode line and a terminator. The mode line is what makes stage 2
 and stage 4 different runs of the same compiler over different sources --

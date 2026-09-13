@@ -173,20 +173,28 @@ def preflight():
 # -------------------------------------------------------------------- stages
 
 def bundle(script, out):
-    """Run one of the PowerShell bundlers into `out`.
+    """Run one of the PowerShell bundlers into `out`, then resolve it into
+    the unit.
 
     The chapter lists are ours; Add-PlugChapter and Resolve-PlugForewords
     are the CHECKOUT's, so foreword cites resolve by upstream's rules and
     not by a copy here that would drift.
+
+    The unit is what the checkout's build/compile.ps1 would hand the seed:
+    source/resolve_unit.ps1 runs that same cite resolver over the bundle and
+    puts what it adds ahead of it -- for a complete bundle, Foreword ListUtils
+    and Tuple, which `for` and tuples desugar to. In place, so stage 7 reads
+    the same source as stage 4.
     """
     out.unlink(missing_ok=True)
-    r = subprocess.run([str(PWSH), '-NoProfile', '-File', str(script),
-                        '-OutFile', str(out)],
-                       capture_output=True, text=True, cwd=str(SOURCE))
-    for line in (r.stdout + r.stderr).strip().splitlines()[-3:]:
-        say('  | ' + line)
-    if r.returncode != 0 or not out.is_file() or out.stat().st_size == 0:
-        die(f'{script.name} produced no {out.name}')
+    for cmd in ([script, '-OutFile', out],
+                [SOURCE / 'resolve_unit.ps1', '-File', out]):
+        r = subprocess.run([str(PWSH), '-NoProfile', '-File'] + [str(c) for c in cmd],
+                           capture_output=True, text=True, cwd=str(SOURCE))
+        for line in (r.stdout + r.stderr).strip().splitlines()[-3:]:
+            say('  | ' + line)
+        if r.returncode != 0 or not out.is_file() or out.stat().st_size == 0:
+            die(f'{cmd[0].name} produced no {out.name}')
     say(f'{out.name}: {out.stat().st_size} bytes')
 
 
