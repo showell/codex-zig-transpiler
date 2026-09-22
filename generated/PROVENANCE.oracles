@@ -2,9 +2,9 @@ codexir and codexcheck -- the oracles rust-codex-compiler is graded
 against, and codexcheck-subject.codex, the source it ports from.
 Emitted by build_codexir.py, not by build.py.
 
-built      2026-09-13T15:32:42Z
-checkout   /home/steve/showell_repos/cobblestone-u60rel
-           9fff850c  Update 60, native nested patterns, declared exports as native roots, concrete generic equa
-subject    2f6bc22de473ea0c  codexzig-subject.codex
-ir-subject 409c58cc1d9fae66  codexir-subject.codex, the source codexir is built from
-codexzig   8169dac4b831adaa  the transpiler that emitted them
+built      2026-09-22T14:00:22Z
+checkout   /home/steve/showell_repos/cobblestone-u61rel
+           3af67f99  Update 61, compiler type resolution, contributor fixes, crypto validation, proven release 
+subject    95fc38d018c159ca  codexzig-subject.codex
+ir-subject 203897b7eeb3f61c  codexir-subject.codex, the source codexir is built from
+codexzig   c5d831dd371debed  the transpiler that emitted them
