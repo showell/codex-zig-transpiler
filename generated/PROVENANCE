@@ -3,11 +3,19 @@ Nothing in generated/ is source; edit source/ and rebuild.
 This file answers for what build.py emits. These sit beside them
 and it does not vouch for their pin:
 
-  PROVENANCE.oracles         2026-09-13 14:59
+  PROVENANCE.oracles         2026-09-13 17:27
+  codexcheck-subject.codex   2026-09-13 15:31
+  codexcheck.native.zig      2026-09-13 15:32
+  codexir-subject.codex      2026-09-13 15:30
+  codexir.native.zig         2026-09-13 15:31
+  local/codexcheck           2026-09-13 15:32
+  local/codexcheck.fp        2026-09-13 15:32
+  local/codexir              2026-09-13 15:31
+  local/codexir.fp           2026-09-13 15:31
 
-checkout   /home/steve/showell_repos/cobblestone-u60rel
-           9fff850c  Update 60, native nested patterns, declared exports as native roots, concrete generic equa
-seed       Codex.cdx  3394819 bytes
+checkout   /home/steve/showell_repos/cobblestone-u61rel
+           3af67f99  Update 61, compiler type resolution, contributor fixes, crypto validation, proven release 
+seed       Codex.cdx  3399989 bytes
 zig        0.16.0
 qemu       QEMU emulator version 8.2.2 (Debian 1:8.2.2+ds-0ubuntu1.18)
 pwsh       PowerShell 7.5.4
@@ -15,16 +23,16 @@ guest      accel=tcg  mem=3072MB
 
 what each guest was actually handed (intake/):
 
-  ringplug-source.codex.blob          403585 bytes   mode 'CDX map'
-  codexzig-subject.codex.blob        3534911 bytes   mode 'IR-CCE decks=172'
-  codexzig.ir.blob                  12303837 bytes   mode 'RING zig'
+  ringplug-source.codex.blob          404759 bytes   mode 'CDX map'
+  codexzig-subject.codex.blob        3541004 bytes   mode 'IR-CCE decks=172'
+  codexzig.ir.blob                  12321563 bytes   mode 'RING zig'
 
 what each guest touched of its cap:
 
   ringplug.cdx                       406 MB of 3072 MB
   codexzig.ir                        721 MB of 3072 MB
-  codexzig.qemu.zig.cce             1347 MB of 3072 MB
+  codexzig.qemu.zig.cce             1357 MB of 3072 MB
 
 fixed point  HOLDS
 arith.codex  MATCHES arith.expected
-built in     506s
+built in     524s
