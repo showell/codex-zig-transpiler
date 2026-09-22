@@ -85,13 +85,11 @@ Section: Driver
  THIS IS `emit-ir-uni`, the driver's own IR mode, and not a re-derivation of
  its phases: `compile-frontend-ir`, then `lift-ir-for-emit`, then the prune.
 
- `compile-frontend-ir` AND NOT `compile-frontend-cdx`, which is the one choice
- here that decides what the IR CONTAINS. The `-cdx` sequence runs a RESOLVE
- phase the `-ir` sequence does not, and running it rewrites every let binding
- whose nullary ConstructedTy names a record into a RecordTy the driver leaves
- as `ctd` -- 930 lines of difference on the ir_to_x86 subject, and an IR wire
- the oracle path never emits. CodexZigHarness calls `-cdx` deliberately,
- because it is feeding an emitter and not a bank.
+ `compile-frontend-ir` because it is the driver's IR entry. Both it and
+ `compile-frontend-cdx` are `compile-frontend-passes` with run-passes True, so
+ both run the IR pipeline and then RESOLVE, which since Update 61 closes every
+ type variable a definition's signature does not carry to int-default.
+ CodexZigHarness calls `-cdx`.
 
  THE CHAPTER NAME IS "Program", which is the driver's own literal and is
  measured rather than assumed: bare metal's IR for this repository's own
