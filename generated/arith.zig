@@ -1,25 +1,37 @@
-fn Tup2(comptime a_: type, comptime b_: type) type {
+fn Tup2S(comptime a_: type, comptime b_: type) type {
     return union(enum) {
     MkTup2: struct { a_, b_ },
     };
 }
+fn Tup2(comptime a_: type, comptime b_: type) type {
+    return *Tup2S(a_, b_);
+}
 
-fn Tup3(comptime a_: type, comptime b_: type, comptime c_: type) type {
+fn Tup3S(comptime a_: type, comptime b_: type, comptime c_: type) type {
     return union(enum) {
     MkTup3: struct { a_, b_, c_ },
     };
 }
+fn Tup3(comptime a_: type, comptime b_: type, comptime c_: type) type {
+    return *Tup3S(a_, b_, c_);
+}
 
-fn Tup4(comptime a_: type, comptime b_: type, comptime c_: type, comptime d_: type) type {
+fn Tup4S(comptime a_: type, comptime b_: type, comptime c_: type, comptime d_: type) type {
     return union(enum) {
     MkTup4: struct { a_, b_, c_, d_ },
     };
 }
+fn Tup4(comptime a_: type, comptime b_: type, comptime c_: type, comptime d_: type) type {
+    return *Tup4S(a_, b_, c_, d_);
+}
 
-fn Tup5(comptime a_: type, comptime b_: type, comptime c_: type, comptime d_: type, comptime e_: type) type {
+fn Tup5S(comptime a_: type, comptime b_: type, comptime c_: type, comptime d_: type, comptime e_: type) type {
     return union(enum) {
     MkTup5: struct { a_, b_, c_, d_, e_ },
     };
+}
+fn Tup5(comptime a_: type, comptime b_: type, comptime c_: type, comptime d_: type, comptime e_: type) type {
+    return *Tup5S(a_, b_, c_, d_, e_);
 }
 
 const ScoreS = struct {
@@ -70,6 +82,10 @@ fn cx_entry() void {
     opening();
 }
 
+comptime {
+    if (@import("builtin").mode == .ReleaseFast or @import("builtin").mode == .ReleaseSmall) @compileError("emitted Codex traps on Integer overflow through zig's safety checks, and ReleaseFast and ReleaseSmall turn the trap into undefined behaviour; build with -O ReleaseSafe or -O Debug");
+}
+
 pub fn main(cx_init: std.process.Init.Minimal) void {
     cx_environ = cx_init.environ;
     const stack_bytes: usize = 512 * 1024 * 1024;
@@ -93,10 +109,10 @@ pub fn main(cx_init: std.process.Init.Minimal) void {
 const std = @import("std");
 
 fn CxList(comptime T: type) type {
-    return struct { items: std.ArrayListUnmanaged(T) = .empty };
+    return struct { items: std.ArrayListUnmanaged(T) = .empty, view: bool = false };
 }
 fn cx_ll_empty(comptime T: type) *CxList(T) {
-    const cx_l = cx_gpa.create(CxList(T)) catch @panic("oom");
+    const cx_l = &cx_raw(CxList(T), 1)[0];
     cx_l.* = .{};
     return cx_l;
 }
@@ -114,13 +130,13 @@ fn cx_ll_empty(comptime T: type) *CxList(T) {
 // growth on purpose, because it is the repeated-append path.
 fn cx_ll_of(comptime T: type, vs: []const T) *CxList(T) {
     const l = cx_ll_empty(T);
-    l.items.ensureTotalCapacityPrecise(cx_gpa, vs.len) catch @panic("oom");
+    cx_reserve(&l.items, vs.len);
     l.items.appendSliceAssumeCapacity(vs);
     return l;
 }
 fn cx_ll_concat(a: anytype, b: @TypeOf(a)) @TypeOf(a) {
     const c = cx_new(@TypeOf(a.*){ .items = .empty });
-    c.items.ensureTotalCapacityPrecise(cx_gpa, a.items.items.len + b.items.items.len) catch @panic("oom");
+    cx_reserve(&c.items, a.items.items.len + b.items.items.len);
     c.items.appendSliceAssumeCapacity(a.items.items);
     c.items.appendSliceAssumeCapacity(b.items.items);
     return c;
@@ -248,6 +264,30 @@ fn cx_bump_free(_: *anyopaque, memory: []u8, _: std.mem.Alignment, _: usize) voi
 }
 const cx_heap_vtable = std.mem.Allocator.VTable{ .alloc = cx_bump_alloc, .resize = cx_bump_resize, .remap = cx_bump_remap, .free = cx_bump_free };
 const cx_gpa = std.mem.Allocator{ .ptr = undefined, .vtable = &cx_heap_vtable };
+// std.mem.Allocator's alloc, create, realloc and free fill memory with 0xAA
+// in Debug and ReleaseSafe; rawAlloc and rawResize reach the bump allocator
+// without that pass. The fill was 30% of vault-crypto-test (GitHub issue 157).
+fn cx_raw(comptime T: type, n: usize) []T {
+    const p = cx_gpa.rawAlloc(n * @sizeOf(T), std.mem.Alignment.of(T), 0) orelse @panic("oom");
+    return @as([*]T, @ptrCast(@alignCast(p)))[0..n];
+}
+fn cx_reserve(l: anytype, n: usize) void {
+    const T = std.meta.Elem(@TypeOf(l.items));
+    if (@sizeOf(T) == 0) {
+        l.capacity = std.math.maxInt(usize);
+        return;
+    }
+    if (l.capacity >= n) return;
+    const o = l.allocatedSlice();
+    if (o.len != 0 and cx_gpa.rawResize(std.mem.sliceAsBytes(o), std.mem.Alignment.of(T), n * @sizeOf(T), 0)) {
+        l.capacity = n;
+        return;
+    }
+    const p = cx_raw(T, n);
+    @memcpy(p[0..l.items.len], l.items);
+    l.items.ptr = p.ptr;
+    l.capacity = n;
+}
 // The deck is the C# plug's rule (_Buf.deck_enter/deck_exit): the
 // outermost enter parks the bump pointer in the bivy and swaps the deck
 // pointer in; the outermost exit swaps back. Deck position is observable
@@ -290,7 +330,7 @@ fn cx_deck_report() void {
     _ = std.os.linux.write(cx_deck_fd, cx_s.ptr, cx_s.len);
 }
 fn cx_new(v: anytype) *@TypeOf(v) {
-    const p = cx_gpa.create(@TypeOf(v)) catch @panic("oom");
+    const p = &cx_raw(@TypeOf(v), 1)[0];
     p.* = v;
     return p;
 }
@@ -317,12 +357,15 @@ fn cx_concat(a: []const u8, b: []const u8) []const u8 {
         const cx_base = @intFromPtr(cx_heap_base());
         const cx_ap = @intFromPtr(a.ptr);
         if (cx_ap >= cx_base and cx_ap - cx_base + a.len == @as(usize, @intCast(cx_hp))) {
-            const cx_tail = cx_gpa.alloc(u8, b.len) catch @panic("oom");
+            const cx_tail = cx_raw(u8, b.len);
             @memcpy(cx_tail, b);
             return a.ptr[0 .. a.len + b.len];
         }
     }
-    return std.mem.concat(cx_gpa, u8, &.{ a, b }) catch @panic("oom");
+    const cx_out = cx_raw(u8, a.len + b.len);
+    @memcpy(cx_out[0..a.len], a);
+    @memcpy(cx_out[a.len..], b);
+    return cx_out;
 }
 const cce_table = [128]u32{ 0, 10, 32, 48, 49, 50, 51, 52, 53, 54, 55, 56, 57, 101, 116, 97, 111, 105, 110, 115, 104, 114, 100, 108, 99, 117, 109, 119, 102, 103, 121, 112, 98, 118, 107, 106, 120, 113, 122, 69, 84, 65, 79, 73, 78, 83, 72, 82, 68, 76, 67, 85, 77, 87, 70, 71, 89, 80, 66, 86, 75, 74, 88, 81, 90, 46, 44, 33, 63, 58, 59, 39, 34, 45, 40, 41, 43, 61, 42, 60, 62, 47, 64, 35, 38, 95, 92, 124, 91, 93, 123, 125, 126, 96, 94, 36, 37, 233, 232, 234, 235, 225, 224, 226, 228, 243, 244, 246, 250, 252, 241, 231, 237, 1072, 1086, 1077, 1080, 1085, 1090, 1089, 1088, 1074, 1083, 1082, 1084, 1076, 1087, 1091 };
 // The multi-byte tiers, from Foreword CCE (which the compiler inlines in
@@ -401,7 +444,7 @@ fn cx_cce_to_utf8(s: []const u8) []const u8 {
 fn cx_show_int(n: i64) []const u8 {
     var cx_tmp: [24]u8 = undefined;
     const ascii = std.fmt.bufPrint(&cx_tmp, "{d}", .{n}) catch unreachable;
-    const buf = cx_gpa.alloc(u8, ascii.len) catch @panic("oom");
+    const buf = cx_raw(u8, ascii.len);
     for (ascii, 0..) |cx_ch, cx_i| {
         buf[cx_i] = if (cx_ch == '-') 73 else 3 + (cx_ch - '0');
     }
