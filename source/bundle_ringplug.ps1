@@ -26,6 +26,18 @@ foreach ($decl in @('codex/compiler/Core/Name.codex',
     $drop = if ($decl -like '*AstNodes.codex') { @('Deck Copies') } else { @() }
     Add-PlugChapter -Lines $lines -Path (Join-Path $repo $decl) -Quire 'Zig' -DropSections $drop
 }
+# THE COMPILER CHAPTERS THE PLUG RUNS, READ FROM THE CHECKOUT, for the same
+# reason as the pages below. U62's zig plug began calling IR\ConstShare
+# (COMPILER-86) and plugs/zig/build.ps1 grew `-CompilerChapters` for it; a list
+# kept here compiles the U62 ring plug to "Undefined name: shared-const-names".
+# Same place in the order as Build-TranspilerPlug: after the IR declarations.
+$zigBuild = Get-Content -Raw (Join-Path $repo 'codex/plugs/zig/build.ps1')
+if ($zigBuild -match '-CompilerChapters\s+@\(([^)]*)\)') {
+    foreach ($cc in [regex]::Matches($Matches[1], "'([^']+)'")) {
+        $rel = $cc.Groups[1].Value -replace '\\', '/'
+        Add-PlugChapter -Lines $lines -Path (Join-Path $repo "codex/compiler/$rel.codex") -Quire 'Zig'
+    }
+}
 # PlugTypes IS carried here, unlike in the transpiler subject: this bundle has
 # no compiler under it, so its copies of ApplyChain and strip-fun-args are the
 # only ones present rather than duplicates of the compiler's.

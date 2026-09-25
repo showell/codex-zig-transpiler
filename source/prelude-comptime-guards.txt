@@ -15,3 +15,9 @@
 # listed here still stops the build, whatever its spelling -- add to this
 # file only a marker you have confirmed lives in fixed prelude text.
 @compileError("zig plug: no address-of for this type")
+
+# U62 (main 26086, our issue 157 item 3): a top-level comptime block, emitted
+# into EVERY program by ZigEmitter.codex's prelude, refuses ReleaseFast and
+# ReleaseSmall. It cannot name a type, so it is a whole string and the scan
+# matches it. Fixed text, and our builds are never in those modes.
+@compileError("emitted Codex traps on Integer overflow through zig's safety checks, and ReleaseFast and ReleaseSmall turn the trap into undefined behaviour; build with -O ReleaseSafe or -O Debug")

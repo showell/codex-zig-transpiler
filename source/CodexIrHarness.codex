@@ -68,28 +68,26 @@ Section: Halt
    in if n == 0 then body
    else body & cir-line-bytes ("codexir: " & show n & " info diagnostics not shown")
 
-Section: Roots
-
- opening.codex's own list, copied because that chapter cannot ride beside a
- harness that defines `opening`. A copy that drifts prunes a root and loses it
- from the IR silently: this list carried four names instead of six for weeks,
- and CodexZigHarness had the SAME truncation, so the two arms agreed with each
- other and neither could see it. An oracle cannot find a mistake both of its
- arms make.
-
-  cir-emit-roots : List Text
-  cir-emit-roots = ["opening", "vb-capacity-auto", "vb-read-auto", "vb-write-auto", "fat16-servicer-read", "fat16-servicer-write"]
-
 Section: Driver
 
  THIS IS `emit-ir-uni`, the driver's own IR mode, and not a re-derivation of
- its phases: `compile-frontend-ir`, then `lift-ir-for-emit`, then the prune.
+ its phases: `compile-frontend-ir`, then `prepare-method-ir`, then
+ `emit-ir-chapter` over what it prepared.
+
+ `prepare-method-ir` is Update 62's, and it is everything between the frontend
+ and the wire: the lift, `eq-attach-helpers`, the prune to the driver's own
+ `ir-emit-roots`, and `method-materialize`, which fills IRTextMeta's
+ `method-templates` and can rewrite the type-defs. Before U62 this harness
+ copied that tail -- `lift-ir-for-emit`, then a prune to a copied roots list
+ -- and the copy had drifted: it never attached the equality helpers, which
+ the driver has done on this path since Update 56 (COMPILER-44: lowering calls
+ the INSTANTIATED `__eq_<T>` name, so a wire without the helper's def carries
+ a dangling reference). U62 then removed `lift-ir-for-emit` outright.
 
  `compile-frontend-ir` because it is the driver's IR entry. Both it and
  `compile-frontend-cdx` are `compile-frontend-passes` with run-passes True, so
  both run the IR pipeline and then RESOLVE, which since Update 61 closes every
  type variable a definition's signature does not carry to int-default.
- CodexZigHarness calls `-cdx`.
 
  THE CHAPTER NAME IS "Program", which is the driver's own literal and is
  measured rather than assumed: bare metal's IR for this repository's own
@@ -103,10 +101,10 @@ Section: Driver
     in let deck-set = __deck-set deck-base
     in let deck-adv = __heap-advance 536870912
     in let fe = compile-frontend-ir src "Program" compile-flags-default
-    in if bag-has-errors (fe.bag) then print-text (cir-halted (bag-errors (fe.bag)))
-    else let lifted-ir = lift-ir-for-emit (fe.ir) compile-flags-default
-    in act
-      write-binary (cir-report (fe.bag))
-      print-text (emit-ir-chapter (ir-prune-unreachable-roots lifted-ir cir-emit-roots) (fe.text-meta) (fe.type-defs))
+    in let prepared = prepare-method-ir fe compile-flags-default
+    in if bag-has-errors (prepared.bag) then print-text (cir-halted (bag-errors (prepared.bag)))
+    else act
+      write-binary (cir-report (prepared.bag))
+      print-text (emit-ir-chapter (prepared.chapter) (prepared.meta) (prepared.type-defs))
     end
   end

@@ -81,34 +81,33 @@ Section: Halt
    in if n == 0 then body
    else body & czg-line-bytes ("codexzig: " & show n & " info diagnostics not shown")
 
-Section: Roots
-
- opening.codex:1316, copied because that chapter cannot ride along.
-
-  czg-emit-roots : List Text
-  czg-emit-roots = ["opening", "vb-capacity-auto", "vb-read-auto", "vb-write-auto", "fat16-servicer-read", "fat16-servicer-write"]
-
 Section: Driver
 
  THIS CALLS THE DRIVER; it does not stand in for one. Update 55 split the entry
  point out, so `Chapter: Opening` is bundlable by a subject supplying its own
- `opening`, and `compile-frontend-cdx` does lex, parse, desugar, scope, check,
- lower, the IR pipeline, resolve and the lambda lift behind one call.
+ `opening`.
 
- What that replaces is thirty lines of copied phase order and deck arithmetic,
+ What that replaced is thirty lines of copied phase order and deck arithmetic,
  and the copy is where every defect of 2026-09-04 lived: a `lower-chapter` call
  left bare when Update 55 gave it a caller-extent requirement, a ceiling pinned
  to 0 because no phase here was wrapped in an extent, and no lowering scratch
  region at all. The driver has always had those; a copy has them only until the
  next Update moves them. The ladder made this same change at Update 55.
 
- `cdx-ir` AND NOT `ir`: `compile-frontend-cdx` returns the lifted chapter in
- `cdx-ir` and deliberately blanks `ir` to a defs-less IRChapter, so reading the
- obvious field yields a program with no definitions in it.
+ IT IS THE DRIVER'S IR FRONT DOOR, `emit-ir-cce`'s sequence, since Update 62:
+ `compile-frontend-ir`, then `prepare-method-ir`, then `emit-ir-chapter`. That
+ is the path bare metal takes in pass 1 of the fixed point -- the seed in IR
+ mode, feeding the ring plug -- so pass 2 is now the same code, not a
+ neighbour of it. Until U62 this called `compile-frontend-cdx`, read the
+ lifted `cdx-ir`, and pruned to a copied roots list. That differed from the IR
+ front door in two ways that never showed in the fixed point: no
+ `eq-attach-helpers` (on the IR path since Update 56, COMPILER-44), and from
+ U62 no `method-materialize`, which fills IRTextMeta's `method-templates`.
 
  The bag is the driver's own, which subsumes the three checks this harness used
  to run itself -- shadowed builtins, cross-chapter collisions and a duplicate
- entry point are all merged into `fe.bag` by `compile-checked`.
+ entry point are all merged into the frontend's bag by `compile-checked`, and
+ `prepare-method-ir` merges its own over it.
 
   opening : [Console, FileSystem] Nothing = act
     src <- read-file-uni "/dev/stdin"
@@ -116,12 +115,13 @@ Section: Driver
     in let deck-base = __heap-save
     in let deck-set = __deck-set deck-base
     in let deck-adv = __heap-advance 536870912
-    in let fe = compile-frontend-cdx src "Codex_Codex" compile-flags-default
-    in if bag-has-errors (fe.bag) then print-text (czg-halted (bag-errors (fe.bag)))
-    else let ir-text = emit-ir-chapter (ir-prune-unreachable-roots (fe.cdx-ir) czg-emit-roots) (fe.text-meta) (fe.type-defs)
+    in let fe = compile-frontend-ir src "Program" compile-flags-default
+    in let prepared = prepare-method-ir fe compile-flags-default
+    in if bag-has-errors (prepared.bag) then print-text (czg-halted (bag-errors (prepared.bag)))
+    else let ir-text = emit-ir-chapter (prepared.chapter) (prepared.meta) (prepared.type-defs)
     in let parsed = parse-ir-chapter ir-text
     in act
-      write-binary (czg-report (fe.bag))
+      write-binary (czg-report (prepared.bag))
       print-text (emit-zig-chapter (parsed.chapter) (parsed.type-defs))
     end
   end
