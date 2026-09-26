@@ -128,6 +128,6 @@ and the other through a `let`, is the fixed point.
 Untracked, and the only ignored path in the repository. It holds pure
 scratch and one product: the `codexzig` executable, the ring's staged first
 megabyte (a duplicate of the blob's own first megabyte, because QEMU's loader
-takes a file and not a slice), the CCE payload before decoding, the guest's
-symbol maps, zig's build cache, and the fingerprint files that let a stage
-skip when its inputs have not moved.
+takes a file and not a slice), the ring plug's raw payload before its UTF-8
+check, the guest's symbol maps, zig's build cache, and the fingerprint files
+that let a stage skip when its inputs have not moved.

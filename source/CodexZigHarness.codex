@@ -122,6 +122,6 @@ Section: Driver
     in let parsed = parse-ir-chapter ir-text
     in act
       write-binary (czg-report (prepared.bag))
-      print-text (emit-zig-chapter (parsed.chapter) (parsed.type-defs))
+      emit-zig-chapter-stream (parsed.chapter) (parsed.type-defs)
     end
   end

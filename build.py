@@ -78,7 +78,7 @@ CODEXZIG = LOCAL / 'codexzig'
 RINGPLUG_BLOB = INTAKE / 'ringplug-source.codex.blob'
 SUBJECT_BLOB = INTAKE / 'codexzig-subject.codex.blob'
 IR_BLOB = INTAKE / 'codexzig.ir.blob'
-CCE_PAYLOAD = LOCAL / 'codexzig.qemu.zig.cce'
+ZIG_PAYLOAD = LOCAL / 'codexzig.qemu.zig.raw'
 
 # A real program the transpiler is made to transpile, build and run.
 SAMPLE = HERE / 'samples' / 'arith.codex'
@@ -360,7 +360,7 @@ def unowned():
     The outputs are already declared once, as the module constants above; this
     reads them rather than repeating them, so a stage added there is covered
     here without anyone remembering to. Byproducts written beside an output --
-    .map, .diags, .sources, .fp, .cce, .stage1 -- belong to it and are matched
+    .map, .diags, .sources, .fp, .raw, .stage1 -- belong to it and are matched
     by prefix. mtime cannot answer this question: a skipped stage leaves one of
     ours untouched, and would read as somebody else's.
 
@@ -445,9 +445,10 @@ def main():
         say(f'{QEMU_ZIG.name} already answers this blob -- not re-transpiling')
     else:
         QEMU_ZIG.unlink(missing_ok=True)
-        if not guest.compile_ring(IR_BLOB, CCE_PAYLOAD, RINGPLUG_CDX, LOCAL, say=say):
+        if not guest.compile_ring(IR_BLOB, ZIG_PAYLOAD, RINGPLUG_CDX, LOCAL, say=say,
+                                 sentinel=guest.RINGPLUG_END):
             die('the ring plug emitted no zig')
-        guest.decode_zig(CCE_PAYLOAD, QEMU_ZIG, say)
+        guest.decode_zig(ZIG_PAYLOAD, QEMU_ZIG, say)
         stamp(QEMU_ZIG, [IR_BLOB, RINGPLUG_CDX])
     refuse_bad_transpile(QEMU_ZIG, 'pass 1, under QEMU')
     refuse_markers(QEMU_ZIG)

@@ -101,7 +101,7 @@ was the transport, not the ring, the poll interval, or the guest.
 
 `codexzig` is `codexir | zigemit` with the pipe replaced by a `let`: emit the
 IR text, parse it straight back in memory, emit zig. The round trip looks
-gratuitous — the two halves meet at a type, and `emit-zig-chapter` takes the
+gratuitous — the two halves meet at a type, and `emit-zig-chapter-stream` takes the
 compiler's own `IRChapter`, so the front end is holding the value already.
 
 The first version did exactly that, worked on 85 ordinary programs, and then

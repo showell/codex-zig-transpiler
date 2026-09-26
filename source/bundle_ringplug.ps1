@@ -15,44 +15,50 @@ $repo = (& python3 (Join-Path $here '..' 'cobblestone.py')).Trim()
 
 . "$repo/codex/plugs/common/plug-build-lib.ps1"
 
-$lines = [System.Collections.Generic.List[string]]::new()
-foreach ($decl in @('codex/compiler/Core/Name.codex',
-                    'codex/compiler/Core/SourceText.codex',
-                    'codex/compiler/Types/CodexType.codex',
-                    'codex/compiler/Ast/AstNodes.codex',
-                    'codex/compiler/IR/IRChapter.codex')) {
-    # AstNodes' 'Deck Copies' section duplicates PhaseAllocator helpers that
-    # a plug bundle reaches another way; a duplicate type is CDX3001.
-    $drop = if ($decl -like '*AstNodes.codex') { @('Deck Copies') } else { @() }
-    Add-PlugChapter -Lines $lines -Path (Join-Path $repo $decl) -Quire 'Zig' -DropSections $drop
+# **UPSTREAM'S OWN BUNDLING, NOT A COPY OF IT.** This used to repeat
+# Build-TranspilerPlug's chapter list by hand, and U63 showed what that costs:
+# upstream began stripping the declaration chapters' new `cites Codex chapter
+# Phase Allocator` (the plug's Plug Types supplies what they cite it for), the
+# copy did not, and the ring plug failed to bundle ("quire 'Codex' is not
+# registered"). So the zig plug's own build line is read from the checkout
+# and Build-TranspilerPlug is called with it, the ring body standing in for
+# ZigPlug -- the one thing that differs. Its compile step is Windows tooling
+# this repo does not run (the seed compiles the bundle under QEMU), so it is
+# replaced after the library is loaded: PowerShell resolves the name at the
+# call. cobblestone-qemu's subjects/bundle_ringplug.ps1 is the same change.
+function Build-PlugCdx {
+    param($BundleSrc, $OutFile, $LogFile, $PlugName, $Survey, $Decks)
 }
-# THE COMPILER CHAPTERS THE PLUG RUNS, READ FROM THE CHECKOUT, for the same
-# reason as the pages below. U62's zig plug began calling IR\ConstShare
-# (COMPILER-86) and plugs/zig/build.ps1 grew `-CompilerChapters` for it; a list
-# kept here compiles the U62 ring plug to "Undefined name: shared-const-names".
-# Same place in the order as Build-TranspilerPlug: after the IR declarations.
-$zigBuild = Get-Content -Raw (Join-Path $repo 'codex/plugs/zig/build.ps1')
-if ($zigBuild -match '-CompilerChapters\s+@\(([^)]*)\)') {
-    foreach ($cc in [regex]::Matches($Matches[1], "'([^']+)'")) {
-        $rel = $cc.Groups[1].Value -replace '\\', '/'
-        Add-PlugChapter -Lines $lines -Path (Join-Path $repo "codex/compiler/$rel.codex") -Quire 'Zig'
-    }
-}
-# PlugTypes IS carried here, unlike in the transpiler subject: this bundle has
-# no compiler under it, so its copies of ApplyChain and strip-fun-args are the
-# only ones present rather than duplicates of the compiler's.
-Add-PlugChapter -Lines $lines -Path (Join-Path $repo 'codex/plugs/common/PlugTypes.codex') -Quire 'Zig'
-Add-PlugChapter -Lines $lines -Path (Join-Path $repo 'codex/plugs/common/IRTextParser.codex') -Quire 'Zig'
-# EVERY PAGE OF Chapter: Zig Emitter, READ FROM THE CHECKOUT. A bundle short
-# a page comes back from the seed as undefined names for every definition on
-# it, so the page set must come from the checkout being bundled rather than
-# from a list kept here, which is right for one checkout and wrong for the
-# next. zig-plug-pages.ps1 reads the chapter's own `Page N of M` footers.
-. (Join-Path $PSScriptRoot 'zig-plug-pages.ps1')
-foreach ($zp in (Get-ZigEmitterPages -Repo $repo)) {
-    Add-PlugChapter -Lines $lines -Path (Join-Path $repo "codex/plugs/zig/$($zp).codex") -Quire 'Zig'
-}
-Add-PlugChapter -Lines $lines -Path (Join-Path $here 'ZigPlugRing.codex') -Quire 'Zig'
 
-$preLines = Resolve-PlugForewords $lines
-Bundle-PlugSource -PreLines $preLines -Lines $lines -BundleSrc $OutFile -PlugName 'ringplug'
+$zigBuild = Get-Content -Raw (Join-Path $repo 'codex/plugs/zig/build.ps1')
+if ($zigBuild -notmatch 'Build-TranspilerPlug\s[^\n]*-Chapters\s+@\(([^)]*)\)') {
+    throw "codex/plugs/zig/build.ps1 no longer calls Build-TranspilerPlug with -Chapters; read it before bundling"
+}
+$zigChapters = @([regex]::Matches($Matches[1], "'([^']+)'") | ForEach-Object { $_.Groups[1].Value })
+if ($zigChapters[-1] -ne 'ZigPlug') { throw "the zig plug's body is no longer its last chapter ($($zigChapters -join ', '))" }
+$compilerChapters = @()
+if ($zigBuild -match '-CompilerChapters\s+@\(([^)]*)\)') {
+    $compilerChapters = @([regex]::Matches($Matches[1], "'([^']+)'") | ForEach-Object { $_.Groups[1].Value })
+}
+
+# The plug directory Build-TranspilerPlug reads its own chapters from, staged
+# outside both trees: upstream's zig chapters, and this repo's body in place
+# of ZigPlug. Its build-output lands there too, never in the checkout, and
+# the directory goes when the bundle has been copied out.
+$stage = Join-Path ([System.IO.Path]::GetTempPath()) ("ringplug-plugdir-" + [guid]::NewGuid().ToString('N'))
+New-Item -ItemType Directory -Force -Path $stage | Out-Null
+try {
+    $chapters = @()
+    foreach ($c in $zigChapters[0..($zigChapters.Count - 2)]) {
+        Copy-Item (Join-Path $repo "codex/plugs/zig/$c.codex") (Join-Path $stage "$c.codex")
+        $chapters += $c
+    }
+    Copy-Item (Join-Path $here 'ZigPlugRing.codex') (Join-Path $stage 'ZigPlugRing.codex')
+    $chapters += 'ZigPlugRing'
+
+    Build-TranspilerPlug -PlugDir $stage -PlugName 'zig' -Chapters $chapters -CompilerChapters $compilerChapters | Out-Host
+    Copy-Item (Join-Path $stage 'build-output/plug-source.codex') $OutFile
+    Write-Host "[ringplug] bundled by upstream's Build-TranspilerPlug: $($chapters -join ', ')"
+} finally {
+    Remove-Item -Recurse -Force $stage -ErrorAction SilentlyContinue
+}

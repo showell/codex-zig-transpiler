@@ -238,7 +238,6 @@ fixed point breaks.
 build.py        the driver: eight stages, three of them guests
 guest.py        bare metal -- QEMU, the serial ring, the gdbstub
 cobblestone.py  where the sister checkout is, and which one it is
-cce.py          host-side decode of the compressed encoding the guest answers in
 source/         the parts that are ours: two chapter lists and three Codex chapters
 samples/        arith.codex and its expected output -- transpiled, built and
                 run on every build, so the artifact is checked doing real work

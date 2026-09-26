@@ -28,8 +28,6 @@ import subprocess
 import sys
 import time
 
-import cce
-
 ACCEL = os.environ.get('CODEX_ACCEL', 'tcg')
 # One variable caps every guest on a host. The 8 GB box runs the 3072
 # default; the seed dies silently above it.
@@ -309,11 +307,12 @@ def peak_rss_mb(pid):
 peaks = []
 
 
-def _read_sized(data, timeout, say, pid=None):
+def _read_sized(data, timeout, say, pid=None, sentinel=None):
     """Read the guest's wire: log lines, SIZE:<n>, n bytes, trailer.
 
     Length-driven rather than idle-driven -- the guest stays running after
-    it answers, so an idle-based read always pays its full timeout.
+    it answers, so an idle-based read always pays its full timeout. Given a
+    `sentinel`, the read ends there instead: see compile_ring.
     """
     data.settimeout(5)
     out, needed = b'', None
@@ -339,6 +338,10 @@ def _read_sized(data, timeout, say, pid=None):
         if not chunk:
             break
         out += chunk
+        if needed is None and sentinel is not None:
+            i = out.find(sentinel)
+            if i >= 0:
+                needed = i + len(sentinel)
         if needed is None:
             i = out.find(b'SIZE:')
             if i >= 0 and b'\n' in out[i:]:
@@ -353,7 +356,7 @@ def _read_sized(data, timeout, say, pid=None):
 
 
 def compile_ring(blob_path, out_path, kernel, scratch=None, timeout=1800,
-                 mem_mb=None, say=print):
+                 mem_mb=None, say=print, sentinel=None):
     """Boot `kernel`, feed it `blob_path`, write its payload to `out_path`.
 
     Returns True on a sized payload. Diagnostics land beside the output as
@@ -362,6 +365,13 @@ def compile_ring(blob_path, out_path, kernel, scratch=None, timeout=1800,
     is a lot of it: capping the log at twelve lines once let 108 duplicate-
     definition warnings from one bundling bug hide CDX6020 and CDX2053 for
     months.
+
+    `sentinel` is for a guest that STREAMS rather than frames. The seed knows
+    its output's length before the first byte and announces `SIZE:<n>`; the
+    ring plug, since U63, prints each definition's zig as it goes (upstream's
+    `emit-zig-chapter-stream`) and cannot. Given a sentinel, the capture ends
+    at that byte string and writes everything before it. cobblestone-qemu's
+    ring_compile.py has the same mode.
     """
     blob = pathlib.Path(blob_path).read_bytes()
     # A NUL terminates read-serial-cce, so one inside the payload truncates
@@ -405,12 +415,24 @@ def compile_ring(blob_path, out_path, kernel, scratch=None, timeout=1800,
             _feed_ring(gdb, blob, staged, say)
         gdb.detach()
 
-        out, peak = _read_sized(data, timeout, say, pid=proc.pid)
+        out, peak = _read_sized(data, timeout, say, pid=proc.pid,
+                                sentinel=sentinel)
         cap = mem_mb or MEM_MB
         peak = peak_rss_mb(proc.pid) or peak
         if peak is not None:
             peaks.append((pathlib.Path(out_path).name, peak, cap))
             say(f'guest peak RSS: {peak} MB of {cap} MB')
+        if sentinel is not None:
+            # No header to separate: everything before the sentinel IS the
+            # payload, and a guest that never reached it did not finish.
+            i = out.find(sentinel)
+            if i < 0:
+                say(f'NO SENTINEL {sentinel!r} -- the guest did not finish')
+                say(out[-800:].decode(errors='replace'))
+                return False
+            pathlib.Path(out_path).write_bytes(out[:i])
+            say(f'wrote {out_path} ({i} bytes before {sentinel.strip().decode()})')
+            return True
         i = out.find(b'SIZE:')
         header = out[:i if i >= 0 else len(out)].decode(errors='replace')
         diags = [l for l in header.splitlines()
@@ -471,7 +493,12 @@ def compile_ring(blob_path, out_path, kernel, scratch=None, timeout=1800,
 # measurement this repository makes, and they exist nowhere else.
 MODE_CDX = b'CDX map\n'             # seed -> a bootable CDX binary
 MODE_IR = b'IR-CCE decks=172\n'     # seed -> IR text, in CCE
-MODE_ZIG = b'RING zig\n'            # ring plug -> zig, in CCE
+MODE_ZIG = b'RING zig\n'            # ring plug -> zig text, up to RINGPLUG_END
+
+# Where the ring plug's stream ends (ZigPlugRing.codex prints it after the
+# zig). The leading newline is the one `print-line-uni ""` supplies, so the
+# payload is exactly what the emitter printed.
+RINGPLUG_END = b'\nRINGPLUG-END'
 
 
 def wrap(source_path, mode, terminator, out_blob):
@@ -492,18 +519,19 @@ def wrap(source_path, mode, terminator, out_blob):
 
 
 def decode_zig(payload_path, out_zig, say=print):
-    """Decode a CCE payload from the ring plug into readable zig.
+    """Check the ring plug's payload is text and write it as the .zig.
 
-    Any byte >= 97 is multibyte CCE, which the host table does not carry;
-    that fails the run rather than leaving <NN> placeholders in a .zig file
-    for zig to choke on later.
+    Since U63 the plug streams with print-uni, so the payload is UTF-8, not
+    CCE. Anything that does not decode fails the run rather than landing in
+    a .zig file for zig to choke on later.
     """
-    text = cce.decode(pathlib.Path(payload_path).read_bytes())
-    bad = re.search(r'<\d+>', text)
-    if bad:
-        o = bad.start()
-        raise SystemExit(f'{payload_path}: undecodable CCE byte near char {o}: '
-                         f'...{text[max(0, o - 40):o + 40]}...')
+    raw = pathlib.Path(payload_path).read_bytes()
+    try:
+        text = raw.decode('utf-8')
+    except UnicodeDecodeError as e:
+        o = e.start
+        raise SystemExit(f'{payload_path}: not UTF-8 near byte {o}: '
+                         f'{raw[max(0, o - 40):o + 40]!r}')
     pathlib.Path(out_zig).write_text(text)
     say(f'wrote {out_zig} ({len(text)} chars)')
     return True

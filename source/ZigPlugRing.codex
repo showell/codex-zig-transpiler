@@ -12,9 +12,9 @@ Chapter: ZigPlugRing
  (code 0 is reserved). That difference is what admits IRs past the TCP
  intake ceiling.
 
- The output side mimics the compiler's own text-plug wire -- a SIZE:
- line, then the payload as raw CCE bytes -- so guest.py's capture works
- unchanged with this cdx as the kernel instead of the seed.
+ The output side is the zig text as the emitter streams it, then a
+ `RINGPLUG-END` line; guest.py's capture ends there. See the note below
+ the body for why there is no longer a `SIZE:` line.
 
 Section: Body
 
@@ -29,11 +29,17 @@ Section: Body
   ring-plug-emit (mode) = act
    src <- read-serial-cce mode
    let parsed = parse-ir-chapter src
-   in let output = emit-zig-chapter (parsed.chapter) (parsed.type-defs)
    in act
-    print-line-uni ("SIZE:" & show (text-length output))
-    print-text output
+    emit-zig-chapter-stream (parsed.chapter) (parsed.type-defs)
     print-line-uni ""
-    print-line-uni ("RINGPLUG-DONE ir=" & show (text-length src) & " defs=" & show (list-length ((parsed.chapter).defs)))
+    print-line-uni ("RINGPLUG-END ir=" & show (text-length src) & " defs=" & show (list-length ((parsed.chapter).defs)))
    end
   end
+
+ SINCE U63 THE EMITTER STREAMS. Upstream replaced `emit-zig-chapter`, which
+ answered the whole reply as one Text, with `emit-zig-chapter-stream`, which
+ prints each definition above a heap mark and restores it: the reply is never
+ held whole, so its length is not known before the first byte, and there is
+ no `SIZE:` to announce. The capture ends at the `RINGPLUG-END` line instead
+ (guest.py's sentinel mode), and the stream is printed with `print-uni`,
+ so it arrives as text rather than as raw CCE.

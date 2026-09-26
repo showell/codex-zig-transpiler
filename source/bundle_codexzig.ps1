@@ -11,7 +11,7 @@
 # reimplementation here would be a fork that drifts silently.
 #
 # IRTextParser IS carried, and that was the whole argument. The seam looks
-# like it could skip the parser -- emit-zig-chapter takes the compiler's own
+# like it could skip the parser -- emit-zig-chapter-stream takes the compiler's own
 # IRChapter, so the front end holds the value already -- but the text wire
 # DERIVES what the AST does not carry (IRTextEmitter.codex:404-406 infers a
 # record's implicit type parameters from its field types as it serialises),
