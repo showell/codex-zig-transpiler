@@ -11513,7 +11513,35 @@ Section: Document Desugaring
    else single-instance-head ids class-name (i + 1)
 
   is-derived-class : Text -> Boolean
-  is-derived-class (name) = name == "Show" | name == "Ord"
+  is-derived-class (name) = name == "Show" | name == "Ord" | name == "Eq"
+
+  derived-takes-dict : Text, ATypeExpr, Text -> Boolean
+  derived-takes-dict (cls) (body-type) (tv) =
+   if cls == "Eq" then some-param-mentions-tyvar body-type tv 0
+   else first-param-is-tyvar body-type tv
+
+  some-param-mentions-tyvar : ATypeExpr, Text, Integer -> Boolean
+  some-param-mentions-tyvar (body-type) (tv) (depth) =
+   if depth >= 64 then False
+   else when body-type
+    is AFunType (p) (r) (s) -> if atype-mentions-name p tv 0 then True else some-param-mentions-tyvar r tv (depth + 1)
+    is otherwise -> False
+
+  atype-mentions-name : ATypeExpr, Text, Integer -> Boolean
+  atype-mentions-name (t) (tv) (depth) =
+   if depth >= 64 then False
+   else when t
+    is ANamedType (n) (ns) -> (n.value) == tv
+    is AFunType (p) (r) (s) -> if atype-mentions-name p tv (depth + 1) then True else atype-mentions-name r tv (depth + 1)
+    is AAppType (h) (as) (s) -> if atype-mentions-name h tv (depth + 1) then True else atype-list-mentions-name as tv 0 (depth + 1)
+    is ALinearType (inner) (s) -> atype-mentions-name inner tv (depth + 1)
+    is otherwise -> False
+
+  atype-list-mentions-name : List ATypeExpr, Text, Integer, Integer -> Boolean
+  atype-list-mentions-name (ts) (tv) (i) (depth) =
+   if i >= list-length ts then False
+   else if atype-mentions-name (list-at ts i) tv depth then True
+   else atype-list-mentions-name ts tv (i + 1) depth
 
   first-param-is-tyvar : ATypeExpr, Text -> Boolean
   first-param-is-tyvar (body-type) (tv) =
@@ -11532,18 +11560,20 @@ Section: Document Desugaring
    let tv = deck-record (ANamedType type-var synthetic-span)
    in if cls == "Show"
     then deck-record (AFunType tv (deck-record (ANamedType (make-name "Text") synthetic-span)) synthetic-span)
+    else if cls == "Eq"
+    then deck-record (AFunType tv (deck-record (AFunType tv (deck-record (ANamedType (make-name "Boolean") synthetic-span)) synthetic-span)) synthetic-span)
     else deck-record (AFunType tv (deck-record (AFunType tv (deck-record (ANamedType (make-name "Integer") synthetic-span)) synthetic-span)) synthetic-span)
 
   rewrite-derived-constrained : ADef, Text, Name, ATypeExpr -> ADef
   rewrite-derived-constrained (d) (cls) (type-var) (body-type) =
-   if first-param-is-tyvar body-type (type-var.value) == False
+   if derived-takes-dict cls body-type (type-var.value) == False
     then deck-record (__record-set d "declared-type" [body-type])
    else let dict-param-name = "__d-" & cls & "-" & (type-var.value)
    in let dict-ty = derived-dict-type cls type-var
    in let new-param = deck-record (AParam { name = make-name dict-param-name, span = synthetic-span })
    in let new-params = list-insert-at (d.params) 0 new-param
    in let all-param-names = for p in (d.params) -> p.name.value
-   in let new-body = rewrite-derived-method-calls-scoped (d.body) (derived-class-method cls) dict-param-name all-param-names
+   in let new-body = if cls == "Eq" then d.body else rewrite-derived-method-calls-scoped (d.body) (derived-class-method cls) dict-param-name all-param-names
    in let new-decl = deck-record (AFunType dict-ty body-type synthetic-span)
    in deck-record (ADef {
     name = d.name,
@@ -11707,6 +11737,19 @@ Section: Document Desugaring
     span = synthetic-span
    })
 
+  prim-eq-wrapper : Text -> ADef
+  prim-eq-wrapper (tn) =
+   let xn = make-name "__wx"
+   in let yn = make-name "__wy"
+   in deck-record (ADef {
+    name = make-name ("__eq_" & tn),
+    params = [deck-record (AParam { name = xn, span = synthetic-span }), deck-record (AParam { name = yn, span = synthetic-span })],
+    declared-type = [deck-record (AFunType (named-aty tn) (deck-record (AFunType (named-aty tn) (named-aty "Boolean") synthetic-span)) synthetic-span)],
+    body = deck-record (ABinaryExpr (deck-record (ANameExpr xn synthetic-span)) OpEq (deck-record (ANameExpr yn synthetic-span)) synthetic-span),
+    chapter-slug = "",
+    span = synthetic-span
+   })
+
   chapter-has-constraint : List ADef, Text, Integer, Integer -> Boolean
   chapter-has-constraint (defs) (cls) (i) (len) =
    if i >= len then False
@@ -11722,9 +11765,12 @@ Section: Document Desugaring
    in let with-show = if chapter-has-constraint all-defs "Show" 0 n
         then [prim-show-wrapper "Integer", prim-show-wrapper "Boolean", prim-show-wrapper "Text", prim-show-wrapper "Real"] & base
         else base
-   in if chapter-has-constraint all-defs "Ord" 0 n
-      then [prim-compare-wrapper "Integer", prim-compare-wrapper "Boolean", prim-compare-wrapper "Text", prim-compare-wrapper "Real"] & with-show
-      else with-show
+   in let with-ord = if chapter-has-constraint all-defs "Ord" 0 n
+        then [prim-compare-wrapper "Integer", prim-compare-wrapper "Boolean", prim-compare-wrapper "Text", prim-compare-wrapper "Real"] & with-show
+        else with-show
+   in if chapter-has-constraint all-defs "Eq" 0 n
+      then [prim-eq-wrapper "Integer", prim-eq-wrapper "Boolean", prim-eq-wrapper "Text", prim-eq-wrapper "Char"] & with-ord
+      else with-ord
 
   collect-class-method-names : List ClassDef, Text, Integer, Integer, List Text -> List Text
   collect-class-method-names (cds) (class-name) (i) (len) (acc) =
@@ -11944,7 +11990,7 @@ Section: Document Desugaring
    in when ty
     is AConstrainedType (class-name) (type-var) (body-type) (sp) ->
      if is-derived-class (class-name.value)
-      then if first-param-is-tyvar body-type (type-var.value)
+      then if derived-takes-dict (class-name.value) body-type (type-var.value)
         then collect-constrained-names defs cds ids (i + 1) len (list-push acc (ConstrainedFnInfo { fn-name = d.name.value, dict-name = "__dderiv-" & (class-name.value) }))
         else collect-constrained-names defs cds ids (i + 1) len acc
       else let ic = count-class-instances ids (class-name.value) 0 (list-length ids) 0
@@ -11980,7 +12026,7 @@ Section: Document Desugaring
       is ANameExpr (n) (ns) ->
        let dict = lookup-constrained-dict (n.value) info 0 (list-length info)
        in if dict == "" then deck-record (AApplyExpr func new-arg s)
-       else let dict-ref = deck-record (ANameExpr (make-name dict) synthetic-span)
+       else let dict-ref = deck-record (ANameExpr (make-name dict) (dict-ref-span dict ns))
         in let with-dict = deck-record (AApplyExpr func dict-ref s)
         in deck-record (AApplyExpr with-dict new-arg s)
       is otherwise -> deck-record (AApplyExpr (insert-dict-refs func info) new-arg s)
@@ -11994,6 +12040,16 @@ Section: Document Desugaring
     is AActExpr (stmts) (s) ->
      deck-record (AActExpr (insert-dict-refs-stmts stmts info 0 (list-length stmts) []) s)
     is otherwise -> expr
+
+ The Eq dictionary is checked at the call, so its reference carries a place to
+ report: an empty span at the callee's start. Empty, because the checker keys a
+ recorded type by start and length, and the callee's own entry at that start is
+ what lowering reads to resolve the dictionary.
+
+  dict-ref-span : Text, SourceSpan -> SourceSpan
+  dict-ref-span (dict) (ns) =
+   if dict == "__dderiv-Eq" then make-span (ns.start) (ns.start) (ns.file-id) (ns.provenance)
+   else synthetic-span
 
   insert-dict-refs-stmts : List AActStmt, List ConstrainedFnInfo, Integer, Integer, List AActStmt -> List AActStmt
   insert-dict-refs-stmts (stmts) (info) (i) (len) (acc) =
@@ -21239,7 +21295,7 @@ Section: Recursive Structural Equality Helpers
  how both compare their field, which compares an Integer with __str_eq.
 
   eq-req-name : EqHelperReq -> Text
-  eq-req-name (req) = eq-helper-name-inst (req.eq-sum-name) (req.eq-sum-actuals)
+  eq-req-name (req) = if eq-req-is-dict req then eqd-helper-name (req.eq-sum-name) else eq-helper-name-inst (req.eq-sum-name) (req.eq-sum-actuals)
 
   eq-req-has : List EqHelperReq, Text, Integer -> Boolean
   eq-req-has (xs) (n) (i) =
@@ -21271,6 +21327,7 @@ Section: Recursive Structural Equality Helpers
   eq-note-site : CodegenState, CodexType, List EqHelperReq, Integer -> List EqHelperReq
   eq-note-site (st) (ty) (acc) (fuel) =
    if fuel <= 0 then acc
+   else if eqd-mentions-slot ty fuel then eqd-note-slotted st ty acc fuel
    else let actuals = eq-site-actuals ty
    in let resolved = strip-unit-ty (resolve-to-sum-with-defs st ty)
    in when resolved
@@ -21328,7 +21385,10 @@ Section: Recursive Structural Equality Helpers
     is IrIntLit (n) (sp) | IrNumLit (n) (sp) -> acc
     is IrTextLit (s) (sp) -> acc
     is IrBoolLit (b) (sp) | IrCharLit (c) (sp) -> acc
-    is IrName (n) (ty) (sp) -> acc
+    is IrName (n) (ty) (sp) ->
+     if text-starts-with n "__eq_" & text-contains n "@" then eq-note-type st (peel-fun-param ty) acc
+     else if text-starts-with n "__eqd_" then eqd-request st (eqd-operand-ty ty eq-rec-fuel) acc
+     else acc
     is IrError (m) (ty) (sp) -> acc
     is IrBinary (op) (l) (r) (ty) (sp) ->
      let noted = if eq-op-is-equality op then eq-note-type st (ir-expr-type l) acc else acc
@@ -21424,9 +21484,186 @@ Section: Recursive Structural Equality Helpers
    in if i + 1 >= n then one
    else deck-record (IrBinary IrAnd one (eq-helper-field-conj st fs (i + 1) n) BooleanTy synthetic-span)
 
+ A DICTIONARY-TAKING HELPER `__eqd_<T>` (docs/Designs/Active/Compiler/
+ GenericEquality.md) is the helper for T instantiated at SLOTS: type variables
+ at the top of the id range, which no checker id reaches, one per type
+ parameter. The helper takes one dictionary per slot, `__eqdict<i>`, and a
+ field at slot i is compared by calling it. Only the canonical instantiation,
+ slots 0..k-1 in order, is minted; a call at other actuals passes their
+ dictionaries. A field whose type holds a slot below another constructor
+ cannot be compared without building a closure, which a helper minted after
+ lambda lifting must not do, so the checker refuses such a type.
+
+  eqd-slot-base : Integer
+  eqd-slot-base = 4294967040
+
+  eqd-slot-ty : Integer -> CodexType
+  eqd-slot-ty (i) = deck-record (TypeVar (__narrow (eqd-slot-base + i)))
+
+  eqd-slots : Integer, Integer, List CodexType -> List CodexType
+  eqd-slots (i) (n) (acc) =
+   if i >= n then acc
+   else eqd-slots (i + 1) n (list-push acc (eqd-slot-ty i))
+
+  eqd-slot-index : CodexType -> Integer
+  eqd-slot-index (ty) =
+   when ty
+    is TypeVar (id) -> if id >= eqd-slot-base then id - eqd-slot-base else 0 - 1
+    is otherwise -> 0 - 1
+
+  eqd-mentions-slot : CodexType, Integer -> Boolean
+  eqd-mentions-slot (ty) (fuel) =
+   if fuel <= 0 then False
+   else if eqd-slot-index ty >= 0 then True
+   else when ty
+    is ListTy (e) -> eqd-mentions-slot e (fuel - 1)
+    is ConstructedTy (n) (as) -> eqd-any-slot as 0 (fuel - 1)
+    is SumTy (n) (as) (cs) -> eqd-any-slot as 0 (fuel - 1)
+    is RecordTy (n) (as) (fs) -> eqd-any-slot as 0 (fuel - 1)
+    is otherwise -> False
+
+  eqd-any-slot : List CodexType, Integer, Integer -> Boolean
+  eqd-any-slot (as) (i) (fuel) =
+   if i >= list-length as then False
+   else if eqd-mentions-slot (list-at as i) fuel then True
+   else eqd-any-slot as (i + 1) fuel
+
+  eq-req-is-dict : EqHelperReq -> Boolean
+  eq-req-is-dict (req) =
+   if list-length (req.eq-sum-actuals) == 0 then False
+   else eqd-slot-index (list-at (req.eq-sum-actuals) 0) == 0
+
+  eqd-helper-name : Text -> Text
+  eqd-helper-name (sn) = deck-record ("__eqd_" & sn)
+
+  eqd-dict-ty : CodexType -> CodexType
+  eqd-dict-ty (t) = deck-record (FunTy t empty-row (deck-record (FunTy t empty-row BooleanTy)))
+
+  eqd-dict-params : EqHelperReq -> List IRParam
+  eqd-dict-params (req) =
+   if eq-req-is-dict req == False then []
+   else for a in (req.eq-sum-actuals) -> deck-record (IRParam { name = deck-record ("__eqdict" & show (eqd-slot-index a)), type-val = eqd-dict-ty a, span = synthetic-span })
+
+  eqd-dict-args : EqHelperReq -> List IRExpr
+  eqd-dict-args (req) =
+   if eq-req-is-dict req == False then []
+   else for a in (req.eq-sum-actuals) -> eq-ir-name (deck-record ("__eqdict" & show (eqd-slot-index a))) (eqd-dict-ty a)
+
+ The type a slot-free operand is compared at, as a dictionary: the desugarer's
+ primitive wrappers, or the helper `emit-eq-op` would call for it.
+
+  eqd-concrete-dict : CodegenState, CodexType -> IRExpr
+  eqd-concrete-dict (st) (t) =
+   let resolved = strip-unit-ty (resolve-to-sum-with-defs st t)
+   in let nm = when resolved
+     is IntegerTy (lo) (hi) (m) -> "__eq_Integer"
+     is TextTy -> "__eq_Text"
+     is BooleanTy -> "__eq_Boolean"
+     is CharTy -> "__eq_Char"
+     is ListTy (e) -> eq-helper-name-inst "List" [e]
+     is SumTy (sn) (as) (cs) -> if list-length (eq-site-actuals t) > 0 then eq-helper-name-inst (sn.value) (eq-site-actuals t) else eq-helper-name (sn.value)
+     is RecordTy (rn) (as) (fs) -> if list-length (eq-site-actuals t) > 0 then eq-helper-name-inst (rn.value) (eq-site-actuals t) else eq-helper-name (rn.value)
+     is otherwise -> ""
+   in if text-length nm == 0 then deck-record (IrError "no equality for a type argument of a dictionary-taking equality helper" (eqd-dict-ty t) synthetic-span)
+   else eq-ir-name nm (eqd-dict-ty t)
+
+  eqd-arg-dict : CodegenState, CodexType -> IRExpr
+  eqd-arg-dict (st) (t) =
+   let i = eqd-slot-index t
+   in if i >= 0 then eq-ir-name (deck-record ("__eqdict" & show i)) (eqd-dict-ty t)
+   else if eqd-mentions-slot t eq-rec-fuel then deck-record (IrError "a type argument holding a type variable below another constructor needs a closure; the checker refuses this type" (eqd-dict-ty t) synthetic-span)
+   else eqd-concrete-dict st t
+
+  eqd-full-ty : List IRExpr, Integer, CodexType -> CodexType
+  eqd-full-ty (ds) (i) (tail) =
+   if i >= list-length ds then tail
+   else deck-record (FunTy (ir-expr-type (list-at ds i)) empty-row (eqd-full-ty ds (i + 1) tail))
+
+  eqd-apply-all : IRExpr, CodexType, List IRExpr, Integer -> IRExpr
+  eqd-apply-all (f) (fty) (xs) (i) =
+   if i >= list-length xs then f
+   else let rty = peel-fun-return fty
+   in eqd-apply-all (deck-record (IrApply f (list-at xs i) rty synthetic-span)) rty xs (i + 1)
+
+  eqd-helper-ref : Text, List IRExpr, CodexType -> IRExpr
+  eqd-helper-ref (tn) (dicts) (t) =
+   let full = eqd-full-ty dicts 0 (eqd-dict-ty t)
+   in eqd-apply-all (eq-ir-name (eqd-helper-name tn) full) full dicts 0
+
+  eqd-type-args : CodexType -> List CodexType
+  eqd-type-args (t) =
+   when t
+    is ListTy (e) -> [e]
+    is ConstructedTy (n) (as) -> as
+    is SumTy (n) (as) (cs) -> as
+    is RecordTy (n) (as) (fs) -> as
+    is otherwise -> eq-empty-type-args
+
+  eqd-type-name : CodegenState, CodexType -> Text
+  eqd-type-name (st) (t) =
+   when strip-unit-ty (resolve-to-sum-with-defs st t)
+    is ListTy (e) -> "List"
+    is SumTy (sn) (as) (cs) -> sn.value
+    is RecordTy (rn) (as) (fs) -> rn.value
+    is otherwise -> ""
+
+  eqd-field-eq : CodegenState, CodexType, IRExpr, IRExpr -> IRExpr
+  eqd-field-eq (st) (fty) (lhs) (rhs) =
+   let i = eqd-slot-index fty
+   in let tn = eqd-type-name st fty
+   in let dict = if i >= 0 then eqd-arg-dict st fty
+    else if text-length tn == 0 then deck-record (IrError "a dictionary-taking equality helper met a field type it cannot compare" (eqd-dict-ty fty) synthetic-span)
+    else eqd-helper-ref tn (for a in eqd-type-args fty -> eqd-arg-dict st a) fty
+   in let inner = deck-record (IrApply dict lhs (deck-record (FunTy fty empty-row BooleanTy)) synthetic-span)
+   in deck-record (IrApply inner rhs BooleanTy synthetic-span)
+
+  eqd-request : CodegenState, CodexType, List EqHelperReq -> List EqHelperReq
+  eqd-request (st) (t) (acc) =
+   let resolved = strip-unit-ty (resolve-to-sum-with-defs st t)
+   in when resolved
+    is ListTy (e) ->
+     if eq-req-has acc (eqd-helper-name "List") 0 then acc
+     else list-push acc (deck-record (EqHelperReq { eq-sum-name = "List", eq-sum-ty = deck-record (ListTy (eqd-slot-ty 0)), eq-sum-actuals = [eqd-slot-ty 0], eq-sum-ctors = [] }))
+    is SumTy (sn) (formals) (cs) ->
+     if list-length formals == 0 | eq-req-has acc (eqd-helper-name (sn.value)) 0 then acc
+     else list-push acc (deck-record (EqHelperReq { eq-sum-name = sn.value, eq-sum-ty = resolved, eq-sum-actuals = eqd-slots 0 (list-length formals) [], eq-sum-ctors = cs }))
+    is RecordTy (rn) (formals) (fs) ->
+     if list-length formals == 0 | eq-req-has acc (eqd-helper-name (rn.value)) 0 then acc
+     else list-push acc (deck-record (EqHelperReq { eq-sum-name = rn.value, eq-sum-ty = resolved, eq-sum-actuals = eqd-slots 0 (list-length formals) [], eq-sum-ctors = [] }))
+    is otherwise -> acc
+
+  eqd-note-slotted : CodegenState, CodexType, List EqHelperReq, Integer -> List EqHelperReq
+  eqd-note-slotted (st) (ty) (acc) (fuel) =
+   if eqd-slot-index ty >= 0 then acc
+   else eqd-note-args st (eqd-type-args ty) 0 (eqd-request st ty acc) fuel
+
+  eqd-note-args : CodegenState, List CodexType, Integer, List EqHelperReq, Integer -> List EqHelperReq
+  eqd-note-args (st) (as) (i) (acc) (fuel) =
+   if i >= list-length as then acc
+   else let a = list-at as i
+   in let acc2 = if eqd-mentions-slot a eq-rec-fuel then acc else eq-note-site st a acc (fuel - 1)
+   in eqd-note-args st as (i + 1) acc2 fuel
+
+ The operand type of a `__eqd_<T>` reference, whatever its dictionary
+ parameters: the parameter of the last arrow before `Boolean`.
+
+  eqd-operand-ty : CodexType, Integer -> CodexType
+  eqd-operand-ty (ty) (fuel) =
+   if fuel <= 0 then ErrorTy
+   else when ty
+    is FunTy (p) (row) (r) ->
+     (when r
+       is FunTy (q) (row2) (r2) ->
+        (when r2
+          is BooleanTy -> p
+          is otherwise -> eqd-operand-ty r (fuel - 1))
+       is otherwise -> ErrorTy)
+    is otherwise -> ErrorTy
+
   eq-helper-field-eq : CodegenState, CodexType, IRExpr, IRExpr -> IRExpr
   eq-helper-field-eq (st) (fty) (lhs) (rhs) =
-   let resolved = strip-unit-ty (resolve-to-sum-with-defs st fty)
+   if eqd-mentions-slot fty eq-rec-fuel then eqd-field-eq st fty lhs rhs
+   else let resolved = strip-unit-ty (resolve-to-sum-with-defs st fty)
    in let plain = deck-record (IrBinary IrEq lhs rhs BooleanTy synthetic-span)
    in when resolved
     is ListTy (e) ->
@@ -21534,7 +21771,9 @@ Section: Recursive Structural Equality Helpers
    in let t3 = eq-fun1-ty eq-list-int-ty (eq-fun1-ty eq-list-int-ty BooleanTy)
    in let t2 = eq-fun1-ty lty t3
    in let t1 = eq-fun1-ty lty t2
-   in let a1 = deck-record (IrApply (eq-ir-name (eq-list-loop-name req) t1) xs t2 synthetic-span)
+   in let dicts = eqd-dict-args req
+   in let t0 = eqd-full-ty dicts 0 t1
+   in let a1 = deck-record (IrApply (eqd-apply-all (eq-ir-name (eq-list-loop-name req) t0) t0 dicts 0) xs t2 synthetic-span)
    in let a2 = deck-record (IrApply a1 ys t3 synthetic-span)
    in let a3 = deck-record (IrApply a2 i (eq-fun1-ty eq-list-int-ty BooleanTy) synthetic-span)
    in deck-record (IrApply a3 n BooleanTy synthetic-span)
@@ -21552,7 +21791,7 @@ Section: Recursive Structural Equality Helpers
    in let entry-body = deck-record (IrIf same-len walk no BooleanTy synthetic-span)
    in deck-record (IRDef {
     name = eq-req-name req,
-    params = [
+    params = eqd-dict-params req & [
       deck-record (IRParam { name = "__eqa", type-val = lty, span = synthetic-span }),
       deck-record (IRParam { name = "__eqb", type-val = lty, span = synthetic-span })
      ],
@@ -21586,7 +21825,7 @@ Section: Recursive Structural Equality Helpers
    in let loop-body = deck-record (IrIf done yes inner-if BooleanTy synthetic-span)
    in deck-record (IRDef {
     name = eq-list-loop-name req,
-    params = [
+    params = eqd-dict-params req & [
       deck-record (IRParam { name = "__eqa", type-val = lty, span = synthetic-span }),
       deck-record (IRParam { name = "__eqb", type-val = lty, span = synthetic-span }),
       deck-record (IRParam { name = "__eqi", type-val = eq-list-int-ty, span = synthetic-span }),
@@ -21616,7 +21855,7 @@ Section: Recursive Structural Equality Helpers
      is otherwise -> req.eq-sum-ty
    in deck-record (IRDef {
     name = eq-req-name req,
-    params = [
+    params = eqd-dict-params req & [
       deck-record (IRParam { name = "__eqa", type-val = sty, span = synthetic-span }),
       deck-record (IRParam { name = "__eqb", type-val = sty, span = synthetic-span })
      ],
@@ -21677,7 +21916,7 @@ Section: Recursive Structural Equality Helpers
      is otherwise -> req.eq-sum-ty
    in deck-record (IRDef {
     name = eq-req-name req,
-    params = [
+    params = eqd-dict-params req & [
       deck-record (IRParam { name = "__eqa", type-val = rty, span = synthetic-span }),
       deck-record (IRParam { name = "__eqb", type-val = rty, span = synthetic-span })
      ],
@@ -23496,7 +23735,8 @@ Section: Common Interrupt Handler
    in let st8 = st-append-code st7t (li reg-rdi tick-count-addr)
    in let st9 = st-append-code st8 (li reg-rsi 1)
    in let st10 = st-append-code st9 (lock-xadd-mem reg-rsi reg-rdi 0)
-   in let st11 = patch-jmp-at st10 ap-tick (st10.code-len)
+   in let st11a = patch-jmp-at st10 ap-tick (st10.code-len)
+   in let st11 = emit-timer-eoi st11a
    in let pr0 = st-append-code st11 (li reg-rdi prof-enabled-addr)
    in let pr1 = st-append-code pr0 (mov-load reg-rdi reg-rdi 0)
    in let pr2 = st-append-code pr1 (test-rr reg-rdi reg-rdi)
@@ -23730,8 +23970,7 @@ Section: Common Interrupt Handler
    in let sp76 = st-append-code sp75 (add-ri reg-rax slice-table-addr)
    in let sp77 = st-append-code sp76 (mov-load reg-rax reg-rax 0)
    in let sp78 = st-append-code sp77 (mov-store reg-rsi reg-rax proc-slice-offset)
-   in let sp79 = emit-timer-eoi sp78
-   in let sp80 = emit-jmp-to sp79 "__process_resume"
+   in let sp80 = emit-jmp-to sp78 "__process_resume"
    in let pno-other-pos = sp80.code-len
    in let rr2 = st-append-code sp80 (mov-rr reg-rcx reg-rdi)
    in let rr2a = st-append-code rr2 (shl-ri reg-rcx 8)
@@ -23760,8 +23999,7 @@ Section: Common Interrupt Handler
    in let sp89f = patch-jcc-at sp89i free-skip pno-pre-pos
    in let sp90 = patch-jcc-at sp89f pno-other pno-other-pos
    in let sp90b = patch-jcc-at sp90 claim-lost pno-other-pos
-   in let st12 = emit-timer-eoi sp90b
-   in let st13 = st-append-code st12 (pop-r reg-rdi)
+   in let st13 = st-append-code sp90b (pop-r reg-rdi)
    in let st14 = st-append-code st13 (pop-r reg-rsi)
    in let st15 = st-append-code st14 (pop-r reg-rdx)
    in let st16 = st-append-code st15 (pop-r reg-rcx)
@@ -24339,8 +24577,7 @@ Section: SMP Initialization
 
   emit-timer-eoi : CodegenState -> CodegenState
   emit-timer-eoi (st) =
-   let st1 = st-append-code st (mov-load reg-rax reg-rsp 32)
-   in let st2 = st-append-code st1 (cmp-ri reg-rax lapic-timer-vector)
+   let st2 = st-append-code st (cmp-ri reg-rax lapic-timer-vector)
    in let pic-pos = st2.code-len
    in let st3 = st-append-code st2 (jcc cc-ne 0)
    in let st4 = emit-lapic-write st3 lapic-eoi-reg 0
@@ -50610,7 +50847,8 @@ Section: Expression Lowering
   lower-derived-apply (inner-f) (pname) (a) (ty) (ctx) (sp) =
    let func-ir = lower-expr inner-f NoExpectTy ctx
    in let func-ty = deep-resolve (ctx.ust) (ir-expr-type func-ir)
-   in let arg-ir = lower-expr a NoExpectTy ctx
+   in if pname == "__dderiv-Eq" then lower-eq-derived-apply func-ir func-ty a ty ctx sp
+   else let arg-ir = lower-expr a NoExpectTy ctx
    in let arg-ty = deep-resolve (ctx.ust) (ir-expr-type arg-ir)
    in let prefix = if pname == "__dderiv-Show" then "__show_" else "__compare_"
    in let dict-rn = prefix & type-name-of arg-ty
@@ -50619,6 +50857,83 @@ Section: Expression Lowering
    in let inner-ret = peel-fun-return func-ty
    in let inner-apply = deck-record (IrApply func-ir dict-ir inner-ret sp)
    in lower-apply-dispatch inner-apply arg-ir (prefer-applied-ty ty (peel-fun-return inner-ret) (ctx.local-type-vars)) sp
+
+  lower-eq-derived-apply : IRExpr, CodexType, AExpr, CodexType, LowerCtx, SourceSpan -> IRExpr
+  lower-eq-derived-apply (func-ir) (func-ty) (a) (ty) (ctx) (sp) =
+   let arg-ir = lower-expr a NoExpectTy ctx
+   in let bound = strip-unit-ty (deep-resolve (ctx.ust) (peel-fun-param (peel-fun-param func-ty)))
+   in let dict-ir = eq-dict-expr bound ctx sp
+   in let inner-ret = peel-fun-return func-ty
+   in let inner-apply = deck-record (IrApply func-ir dict-ir inner-ret sp)
+   in lower-apply-dispatch inner-apply arg-ir (prefer-applied-ty ty (peel-fun-return inner-ret) (ctx.local-type-vars)) sp
+
+  eq-dict-ir : CodexType, LowerCtx, SourceSpan -> IRExpr
+  eq-dict-ir (bound) (ctx) (sp) =
+   let fty = deck-record (FunTy bound empty-row (deck-record (FunTy bound empty-row BooleanTy)))
+   in let passed = eq-dict-for-var bound ctx
+   in if text-length passed > 0 then deck-record (IrName passed fty sp)
+   else if eq-ty-is-list bound then deck-record (IrName (eq-helper-name-inst "List" (eq-site-actuals bound)) fty sp)
+   else let tn = type-name-of bound
+   in if tn == "Integer" | tn == "Boolean" | tn == "Text" | tn == "Char" then deck-record (IrName ("__eq_" & tn) fty sp)
+   else let probe = if text-length tn == 0 | is-primitive-type-name tn then ErrorTy
+    else lookup-type-split (ctx.overlay) (ctx.base) ("__eq_" & tn)
+   in when probe
+    is ErrorTy | NoExpectTy -> deck-record (IrError "no Eq dictionary: the type this call binds has no structural equality" fty sp)
+    is otherwise -> deck-record (IrName (if eq-type-has-args bound then eq-helper-name-inst tn (eq-site-actuals bound) else "__eq_" & tn) fty sp)
+
+  eq-dict-expr : CodexType, LowerCtx, SourceSpan -> IRExpr
+  eq-dict-expr (t) (ctx) (sp) =
+   let passed = eq-dict-for-var t ctx
+   in if text-length passed > 0 then deck-record (IrName passed (eqd-dict-ty t) sp)
+   else if ty-has-typevars t == False then eq-dict-ir t ctx sp
+   else let tn = if eq-ty-is-list t then "List" else type-name-of t
+   in if text-length tn == 0 | list-length (eq-type-args-of t) == 0 then deck-record (IrError "no Eq dictionary: a type variable here has no Eq a => in scope" (eqd-dict-ty t) sp)
+   else eqd-helper-ref tn (for a in eq-type-args-of t -> eq-dict-expr (strip-unit-ty (deep-resolve (ctx.ust) a)) ctx sp) t
+
+  eq-type-args-of : CodexType -> List CodexType
+  eq-type-args-of (t) =
+   when t
+    is ListTy (e) -> [e]
+    is otherwise -> if eq-type-has-args t then type-key-args t else []
+
+  eq-needs-dict-helper : CodexType, LowerCtx -> Boolean
+  eq-needs-dict-helper (t) (ctx) =
+   if ty-has-typevars t == False then False
+   else if list-length (eq-type-args-of t) == 0 then False
+   else eq-any-dict-in-scope (ctx.overlay)
+
+  eq-any-dict-in-scope : LookupOverlay -> Boolean
+  eq-any-dict-in-scope (ovl) =
+   when ovl
+    is OverlayNil -> False
+    is OverlayCons (b) (rest) -> if text-starts-with (b.name) "__d-Eq-" then True else eq-any-dict-in-scope rest
+
+  lower-eq-dict-call : CodexType, IRExpr, IRExpr, IRExpr, SourceSpan, Boolean -> IRExpr
+  lower-eq-dict-call (opty) (dict) (left-ir) (right-ir) (s) (positive) =
+   let inner = deck-record (IrApply dict left-ir (deck-record (FunTy opty empty-row BooleanTy)) s)
+   in let call = deck-record (IrApply inner right-ir BooleanTy s)
+   in if positive then call
+      else deck-record (IrIf call (deck-record (IrBoolLit False s)) (deck-record (IrBoolLit True s)) BooleanTy s)
+
+  eq-dict-for-var : CodexType, LowerCtx -> Text
+  eq-dict-for-var (ty) (ctx) =
+   when ty
+    is TypeVar (id) -> eq-dict-in-overlay (ctx.overlay) id ctx
+    is otherwise -> ""
+
+  eq-dict-in-overlay : LookupOverlay, Integer, LowerCtx -> Text
+  eq-dict-in-overlay (ovl) (id) (ctx) =
+   when ovl
+    is OverlayNil -> ""
+    is OverlayCons (b) (rest) ->
+     if text-starts-with (b.name) "__d-Eq-" & eq-dict-binds-var (b.bound-type) id ctx then b.name
+     else eq-dict-in-overlay rest id ctx
+
+  eq-dict-binds-var : CodexType, Integer, LowerCtx -> Boolean
+  eq-dict-binds-var (dty) (id) (ctx) =
+   when deep-resolve (ctx.ust) (peel-fun-param dty)
+    is TypeVar (pid) -> pid == id
+    is otherwise -> False
 
   constrained-dict-rn : Text, Text, LowerCtx -> Text
   constrained-dict-rn (pname) (tn) (ctx) =
@@ -50845,7 +51160,12 @@ Section: Expression Lowering
    let resolved-left = deep-resolve (ctx.ust) left-ty
    in let tn = type-name-of resolved-left
    in let stripped = strip-unit-ty resolved-left
-   in if eq-ty-is-list stripped
+   in let dict = eq-dict-for-var stripped ctx
+   in if text-length dict > 0
+   then lower-eq-helper-call stripped dict left-ir right-ir s positive
+   else if eq-needs-dict-helper stripped ctx
+   then lower-eq-dict-call stripped (eq-dict-expr stripped ctx s) left-ir right-ir s positive
+   else if eq-ty-is-list stripped
    then lower-eq-helper-call stripped (eq-helper-name-inst "List" (eq-site-actuals stripped)) left-ir right-ir s positive
    else lower-eq-dispatch-named left-ty tn stripped left-ir right-ir ty ctx s positive
 
@@ -50860,7 +51180,7 @@ Section: Expression Lowering
   lower-eq-dispatch-named : CodexType, Text, CodexType, IRExpr, IRExpr, CodexType, LowerCtx, SourceSpan, Boolean -> IRExpr
   lower-eq-dispatch-named (left-ty) (tn) (stripped) (left-ir) (right-ir) (ty) (ctx) (s) (positive) =
    let has-args = eq-type-has-args stripped
-   in let probe = if text-length tn == 0 then ErrorTy
+   in let probe = if text-length tn == 0 | is-primitive-type-name tn then ErrorTy
     else lookup-type-split (ctx.overlay) (ctx.base) ("__eq_" & tn)
    in when probe
     is ErrorTy | NoExpectTy -> deck-record (IrBinary (lower-bin-op (eq-op-for positive) left-ty) left-ir right-ir (binary-result-type (eq-op-for positive) left-ty ty) s)
@@ -62911,6 +63231,7 @@ Section: The Table
    BuiltinSpec { bs-name = "compare", bs-alloc = "none", bs-varies = False, bs-type = Just (ForAllTy 0 (FunTy (TypeVar 0) empty-row (FunTy (TypeVar 0) empty-row int-ty-default))), bs-emit = None },
    BuiltinSpec { bs-name = "__dderiv-Show", bs-alloc = "unknown", bs-varies = False, bs-type = Just (ForAllTy 0 (FunTy (TypeVar 0) empty-row TextTy)), bs-emit = None },
    BuiltinSpec { bs-name = "__dderiv-Ord", bs-alloc = "unknown", bs-varies = False, bs-type = Just (ForAllTy 0 (FunTy (TypeVar 0) empty-row (FunTy (TypeVar 0) empty-row int-ty-default))), bs-emit = None },
+   BuiltinSpec { bs-name = "__dderiv-Eq", bs-alloc = "unknown", bs-varies = False, bs-type = Just (ForAllTy 0 (FunTy (TypeVar 0) empty-row (FunTy (TypeVar 0) empty-row BooleanTy))), bs-emit = None },
    BuiltinSpec { bs-name = "print-line", bs-alloc = "none", bs-varies = True, bs-type = Just (FunTy TextTy (concrete-row "Console.Write") NothingTy), bs-emit = Just (\s a -> emit-print-line-builtin s a) },
    BuiltinSpec { bs-name = "print-line-raw", bs-alloc = "none", bs-varies = True, bs-type = Just (FunTy TextTy (concrete-row "Console.Write") NothingTy), bs-emit = Just (\s a -> emit-print-line-raw-builtin s a) },
    BuiltinSpec { bs-name = "print-text", bs-alloc = "none", bs-varies = True, bs-type = Just (FunTy TextTy (concrete-row "Console.Write") NothingTy), bs-emit = Just (\s a -> emit-print-text-builtin s a) },
@@ -64692,7 +65013,7 @@ Section: Check Definition
    in let (_, u-st) = unify (body-r.state) remaining-inner (body-r.inferred-type) (aexpr-span (def.body))
    in let ret-checked = lint-return-narrowing u-st (env2.env) (def.body) (body-r.inferred-type) remaining-inner (aexpr-span (def.body))
    in let effect-checked = check-effect-row-subset ret-checked (declared-performing-row (declared.expected-type) (list-length (def.params))) (body-r.effect-row) grounded (aexpr-span (def.body))
-   in let rigid-checked = check-eq-on-declared-vars (check-declared-rigidity effect-checked (declared.declared-vars) 0 (list-length (declared.declared-vars)) (def.name.value) (def.span)) (if text-starts-with (def.name.value) "__eq_" then [] else declared.declared-vars) eq0
+   in let rigid-checked = check-eq-on-declared-vars (check-declared-rigidity effect-checked (declared.declared-vars) 0 (list-length (declared.declared-vars)) (def.name.value) (def.span)) (if text-starts-with (def.name.value) "__eq_" then [] else declared.declared-vars) (eq-dict-var-of st0 def (declared.expected-type)) eq0
    in let env-type = env-lookup env rn
    in let tied-state = when env-type
         is ForAllTy (id) (body) -> let (_, tied-u) = unify rigid-checked (declared.expected-type) (strip-forall-ty env-type) (def.span) in tied-u
@@ -64720,15 +65041,62 @@ Section: Check Definition
         else add-unify-error st cdx-body-fixes-declared-var ("the body of '" & name & "' decides a type its own signature leaves to the caller: a declared type variable is fixed by the body to " & type-desc settled & ". A signature variable is the caller's to choose, so the body must answer every choice; if the body only ever answers " & type-desc settled & ", declare that.") span
    in check-declared-rigidity st2 ids (i + 1) len name span
 
-  check-eq-on-declared-vars : UnificationState, List Integer, Integer -> UnificationState
-  check-eq-on-declared-vars (st) (ids) (i) =
-   if list-length ids == 0 then st
-   else if i >= list-length (st.eq-sites) then st
+ An `Eq a =>` definition receives its dictionary as a first parameter named
+ `__d-Eq-<a>`, typed `a -> a -> Boolean`; that `a` is the one variable its body
+ may compare. A site with an empty span is a call's dictionary (the desugarer's
+ `dict-ref-span`), checked here for the type the call binds.
+
+  eq-dict-var-of : UnificationState, ADef, CodexType -> Integer
+  eq-dict-var-of (st) (def) (ty) =
+   if list-length (def.params) == 0 then 0 - 1
+   else if text-starts-with ((list-at (def.params) 0).name.value) "__d-Eq-" == False then 0 - 1
+   else when deep-resolve st (peel-fun-param (peel-fun-param ty))
+    is TypeVar (id) -> id
+    is otherwise -> 0 - 1
+
+  check-eq-on-declared-vars : UnificationState, List Integer, Integer, Integer -> UnificationState
+  check-eq-on-declared-vars (st) (ids) (eq-var) (i) =
+   if i >= list-length (st.eq-sites) then st
    else let site = list-at (st.eq-sites) i
-   in let st2 = if type-mentions-var-in (deep-resolve st (site.ty)) ids
-        then add-unify-error st cdx-eq-on-type-variable eq-on-type-variable-refusal (site.span)
+   in let t = deep-resolve st (site.ty)
+   in let st2 = if is-type-var-id t eq-var then st
+        else if type-mentions-var-in t (int-list-without ids eq-var 0 []) then add-unify-error st cdx-eq-on-type-variable eq-on-type-variable-refusal (site.span)
+        else if eq-var >= 0 & eq-var-shape-ok t eq-var 0 == False then add-unify-error st cdx-eq-on-type-variable eq-on-type-variable-refusal (site.span)
+        else if span-length (site.span) > 0 then st
+        else if is-vector-ty t then vec-eq-error st t (site.span)
+        else if is-real-type t then add-unify-error st cdx-real-equality-banned "This call binds an Eq a => variable to a Real, and floating-point equality is not safe. Compare with ~ or ~0 in a function of your own." (site.span)
+        else if eq-operand-withheld t then add-unify-error st cdx-structural-eq-withheld "This call binds an Eq a => variable to a type with no equality: a field holds a Real, a Vector or a SizedVec, which have no single structural equality." (site.span)
         else st
-   in check-eq-on-declared-vars st2 ids (i + 1)
+   in check-eq-on-declared-vars st2 ids eq-var (i + 1)
+
+  eq-var-shape-ok : CodexType, Integer, Integer -> Boolean
+  eq-var-shape-ok (t) (v) (depth) =
+   if type-mentions-var-in t [v] == False then True
+   else if depth >= 32 then False
+   else when t
+    is TypeVar (id) -> id == v
+    is ListTy (e) -> eq-var-shape-ok e v (depth + 1)
+    is ConstructedTy (n) (as) -> eq-var-shapes-ok as v 0 (depth + 1)
+    is SumTy (n) (as) (cs) -> eq-var-shapes-ok as v 0 (depth + 1)
+    is RecordTy (n) (as) (fs) -> eq-var-shapes-ok as v 0 (depth + 1)
+    is otherwise -> False
+
+  eq-var-shapes-ok : List CodexType, Integer, Integer, Integer -> Boolean
+  eq-var-shapes-ok (as) (v) (i) (depth) =
+   if i >= list-length as then list-length as > 0
+   else if eq-var-shape-ok (list-at as i) v depth then eq-var-shapes-ok as v (i + 1) depth
+   else False
+
+  int-list-without : List Integer, Integer, Integer, List Integer -> List Integer
+  int-list-without (xs) (x) (i) (acc) =
+   if i >= list-length xs then acc
+   else int-list-without xs x (i + 1) (if list-at xs i == x then acc else list-push acc (list-at xs i))
+
+  is-type-var-id : CodexType, Integer -> Boolean
+  is-type-var-id (t) (id) =
+   when t
+    is TypeVar (tid) -> tid == id
+    is otherwise -> False
 
   type-mentions-var-in : CodexType, List Integer -> Boolean
   type-mentions-var-in (ty) (ids) =
@@ -64743,7 +65111,7 @@ Section: Check Definition
    else int-in-list xs x (i + 1)
 
   eq-on-type-variable-refusal : Text
-  eq-on-type-variable-refusal = "== and /= are refused on a value whose type is a type variable of this definition's signature (or holds one): the body cannot see the type, so the comparison would compare the two values' words, which for Text, a list, a vector or a record are their addresses. Take the comparison as a parameter (an `a, a -> Boolean` argument), or declare the concrete type."
+  eq-on-type-variable-refusal = "== and /= are refused on a value whose type is a type variable of this definition's signature (or holds one): the body cannot see the type, so the comparison would compare the two values' words, which for Text, a list, a vector or a record are their addresses. Declare `Eq a =>` on the signature, take the comparison as a parameter (an `a, a -> Boolean` argument), or declare the concrete type."
 
   lint-return-narrowing : UnificationState, TypeEnv, AExpr, CodexType, CodexType, SourceSpan -> UnificationState
   lint-return-narrowing (st) (env) (body) (body-ty) (ret-ty) (span) =
@@ -68568,7 +68936,8 @@ Section: Infer Name
     then
      let raw = env-lookup env resolved
      in let (inst-ty0, inst-st) = instantiate-type st raw
-     in let (inst-ty, opened-st) = open-spine-rows inst-st inst-ty0
+     in let (inst-ty, opened-st0) = open-spine-rows inst-st inst-ty0
+     in let opened-st = if span-length span == 0 & name == "__dderiv-Eq" then record-eq-site opened-st0 span (peel-fun-param inst-ty) else opened-st0
      in let warned-st = if name == "assume"
       then __record-set opened-st "bag" (bag-add (opened-st.bag) (make-warning cdx-axiom-assumed "Proof uses 'assume': this equality is asserted as an unproven axiom, not checked. It is part of the trust trail." span))
       else opened-st
