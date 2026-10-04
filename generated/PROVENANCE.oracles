@@ -2,9 +2,9 @@ codexir and codexcheck -- the oracles rust-codex-compiler is graded
 against, and codexcheck-subject.codex, the source it ports from.
 Emitted by build_codexir.py, not by build.py.
 
-built      2026-09-26T10:09:41Z
-checkout   /root/showell_repos/cobblestone-u64rel
-           82cb77a  Update 64, the QEMU serial-input stall Steve Howell reported fixed at its cause (the timer 
-subject    b5d682fb29fda555  codexzig-subject.codex
-ir-subject c6353a0e93866d6b  codexir-subject.codex, the source codexir is built from
-codexzig   6d1afe199ef5bf76  the transpiler that emitted them
+built      2026-10-04T12:29:02Z
+checkout   /home/steve/showell_repos/cobblestone-u66rel
+           e7c7a6f3  Update 66, a local Qwen3 LLM running in a WebGPU tab and serving Spark Studio, SDXL with D
+subject    6d6652e6a3a2029a  codexzig-subject.codex
+ir-subject 0b0aadb3910a2cfa  codexir-subject.codex, the source codexir is built from
+codexzig   3342dbb13dfd31ae  the transpiler that emitted them
