@@ -1,37 +1,37 @@
-fn Tup2S(comptime a_: type, comptime b_: type) type {
+fn Tup2S(comptime _tv_a: type, comptime _tv_b: type) type {
     return union(enum) {
-    MkTup2: struct { a_, b_ },
+    MkTup2: struct { _tv_a, _tv_b },
     };
 }
-fn Tup2(comptime a_: type, comptime b_: type) type {
-    return *Tup2S(a_, b_);
+fn Tup2(comptime _tv_a: type, comptime _tv_b: type) type {
+    return *Tup2S(_tv_a, _tv_b);
 }
 
-fn Tup3S(comptime a_: type, comptime b_: type, comptime c_: type) type {
+fn Tup3S(comptime _tv_a: type, comptime _tv_b: type, comptime _tv_c: type) type {
     return union(enum) {
-    MkTup3: struct { a_, b_, c_ },
+    MkTup3: struct { _tv_a, _tv_b, _tv_c },
     };
 }
-fn Tup3(comptime a_: type, comptime b_: type, comptime c_: type) type {
-    return *Tup3S(a_, b_, c_);
+fn Tup3(comptime _tv_a: type, comptime _tv_b: type, comptime _tv_c: type) type {
+    return *Tup3S(_tv_a, _tv_b, _tv_c);
 }
 
-fn Tup4S(comptime a_: type, comptime b_: type, comptime c_: type, comptime d_: type) type {
+fn Tup4S(comptime _tv_a: type, comptime _tv_b: type, comptime _tv_c: type, comptime _tv_d: type) type {
     return union(enum) {
-    MkTup4: struct { a_, b_, c_, d_ },
+    MkTup4: struct { _tv_a, _tv_b, _tv_c, _tv_d },
     };
 }
-fn Tup4(comptime a_: type, comptime b_: type, comptime c_: type, comptime d_: type) type {
-    return *Tup4S(a_, b_, c_, d_);
+fn Tup4(comptime _tv_a: type, comptime _tv_b: type, comptime _tv_c: type, comptime _tv_d: type) type {
+    return *Tup4S(_tv_a, _tv_b, _tv_c, _tv_d);
 }
 
-fn Tup5S(comptime a_: type, comptime b_: type, comptime c_: type, comptime d_: type, comptime e_: type) type {
+fn Tup5S(comptime _tv_a: type, comptime _tv_b: type, comptime _tv_c: type, comptime _tv_d: type, comptime _tv_e: type) type {
     return union(enum) {
-    MkTup5: struct { a_, b_, c_, d_, e_ },
+    MkTup5: struct { _tv_a, _tv_b, _tv_c, _tv_d, _tv_e },
     };
 }
-fn Tup5(comptime a_: type, comptime b_: type, comptime c_: type, comptime d_: type, comptime e_: type) type {
-    return *Tup5S(a_, b_, c_, d_, e_);
+fn Tup5(comptime _tv_a: type, comptime _tv_b: type, comptime _tv_c: type, comptime _tv_d: type, comptime _tv_e: type) type {
+    return *Tup5S(_tv_a, _tv_b, _tv_c, _tv_d, _tv_e);
 }
 
 const ScoreS = struct {
