@@ -8,7 +8,7 @@ one blob, and reads back a sized payload:
     ringplug.cdx    + an IR-CCE blob       ->  zig, as CCE bytes
 
 The intake is the compiler's own serial ring, not streamed serial. The
-input's first megabyte is placed at guest phys 0x500000 by QEMU's generic
+input's first megabyte is placed at the seed's serial ring by QEMU's generic
 loader before boot, and the ring's write cursor is injected after READY
 through the gdbstub -- the same re-injection codex-vm does on the guest's
 first LSR read. Nothing is streamed in, so there is nothing to race.
@@ -33,10 +33,23 @@ ACCEL = os.environ.get('CODEX_ACCEL', 'tcg')
 # default; the seed dies silently above it.
 MEM_MB = int(os.environ.get('CODEX_MEM_MB', '3072'))
 
-RING_ADDR = 0x500000
-RING_SIZE = 0x100000   # 1 MB, must match the seed's serial-ring-buf-size
-WPOS_ADDR = 28704      # 0x7020, X86_64Boot.codex
-RPOS_ADDR = 28712      # 0x7028
+# The ring's place and size are READ from the checkout, never written here:
+# Update 70 moved the ring from 5 MiB to 15 MiB (the image had grown past
+# 6 MiB), and a hard-coded 0x500000 preloaded the blob where the seed no longer
+# looks, so the guest sat in __read_line with nothing on the wire.
+def boot_constant(name):
+    import cobblestone
+    src = (cobblestone.root() / 'codex' / 'compiler' / 'Emit' / 'X86_64Boot.codex').read_text()
+    m = re.search(rf'^\s*{re.escape(name)} : Integer = (\d+)\s*$', src, re.M)
+    if not m:
+        raise RuntimeError(f'no `{name} : Integer = <n>` in X86_64Boot.codex')
+    return int(m.group(1))
+
+
+RING_ADDR = boot_constant('serial-ring-buf-addr')
+RING_SIZE = boot_constant('serial-ring-buf-size')
+WPOS_ADDR = boot_constant('serial-write-pos-addr')
+RPOS_ADDR = boot_constant('serial-read-pos-addr')
 
 
 def free_port():
