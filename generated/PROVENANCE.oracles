@@ -2,9 +2,9 @@ codexir and codexcheck -- the oracles rust-codex-compiler is graded
 against, and codexcheck-subject.codex, the source it ports from.
 Emitted by build_codexir.py, not by build.py.
 
-built      2026-10-19T13:47:58Z
-checkout   /root/cb/cobblestone-failfix
-           b70464a6  Zig plug: fail raises where it is called, not wherever the name appears
-subject    3539c2b73a22cd9c  codexzig-subject.codex
-ir-subject 74eb879b9d9ef999  codexir-subject.codex, the source codexir is built from
-codexzig   204111ff16231f6a  the transpiler that emitted them
+built      2026-10-28T21:24:24Z
+checkout   /root/cb/cobblestone-u72
+           07e9a4ea  Update 72: structured concurrency wired from source (par and race over fork and await-any,
+subject    3bf788880b05b143  codexzig-subject.codex
+ir-subject ab40b4a20a859b6e  codexir-subject.codex, the source codexir is built from
+codexzig   9e226f2296dee77d  the transpiler that emitted them
