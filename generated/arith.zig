@@ -83,7 +83,7 @@ fn cx_entry() void {
 }
 
 comptime {
-    if (@import("builtin").mode == .ReleaseFast or @import("builtin").mode == .ReleaseSmall) @compileError("emitted Codex traps on Integer overflow through zig's safety checks, and ReleaseFast and ReleaseSmall turn the trap into undefined behaviour; build with -O ReleaseSafe or -O Debug");
+    if (!@import("std").debug.runtime_safety) @compileError("emitted Codex traps on Integer overflow through zig's safety checks, and ReleaseFast and ReleaseSmall turn the trap into undefined behaviour; build with -O ReleaseSafe or -O Debug");
 }
 
 pub fn main(cx_init: std.process.Init.Minimal) void {

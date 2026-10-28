@@ -3,11 +3,11 @@ Nothing in generated/ is source; edit source/ and rebuild.
 This file answers for what build.py emits. These sit beside them
 and it does not vouch for their pin:
 
-  PROVENANCE.oracles         2026-10-19 13:12
+  PROVENANCE.oracles         2026-10-28 20:55
 
-checkout   /root/cb/cobblestone-failfix
-           b70464a6  Zig plug: fail raises where it is called, not wherever the name appears
-seed       Codex.cdx  3828773 bytes
+checkout   /root/cb/cobblestone-u72
+           07e9a4ea  Update 72: structured concurrency wired from source (par and race over fork and await-any,
+seed       Codex.cdx  3859863 bytes
 zig        0.16.0
 qemu       QEMU emulator version 8.2.2 (Debian 1:8.2.2+ds-0ubuntu1.18)
 pwsh       PowerShell 7.6.7
@@ -15,16 +15,16 @@ guest      accel=tcg  mem=3072MB
 
 what each guest was actually handed (intake/):
 
-  ringplug-source.codex.blob          453764 bytes   mode 'CDX map'
-  codexzig-subject.codex.blob        4030448 bytes   mode 'IR-CCE decks=172'
-  codexzig.ir.blob                  13613471 bytes   mode 'RING zig'
+  ringplug-source.codex.blob          473513 bytes   mode 'CDX map'
+  codexzig-subject.codex.blob        4084595 bytes   mode 'IR-CCE decks=172'
+  codexzig.ir.blob                  13778527 bytes   mode 'RING zig'
 
 what each guest touched of its cap:
 
-  ringplug.cdx                       395 MB of 3072 MB
-  codexzig.ir                        735 MB of 3072 MB
-  codexzig.qemu.zig.raw              366 MB of 3072 MB
+  ringplug.cdx                       407 MB of 3072 MB
+  codexzig.ir                        732 MB of 3072 MB
+  codexzig.qemu.zig.raw              379 MB of 3072 MB
 
 fixed point  HOLDS
 arith.codex  MATCHES arith.expected
-built in     359s
+built in     698s
